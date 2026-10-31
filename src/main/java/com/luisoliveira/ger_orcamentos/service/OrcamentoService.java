@@ -150,6 +150,7 @@ public class OrcamentoService {
                     dto.getNomeContato(),
                     dto.getEmailContato(),
                     dto.getTelefoneContato(),
+                    dto.getCelularContato(),
                     dto.getLocalCidade()
             );
             fornecedor = fornecedorRepository.save(novoFornecedor);

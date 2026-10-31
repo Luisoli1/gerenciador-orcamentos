@@ -3,6 +3,7 @@ package com.luisoliveira.ger_orcamentos.service;
 import com.luisoliveira.ger_orcamentos.dto.ItemQuadroDTO;
 import com.luisoliveira.ger_orcamentos.dto.QuadroComparativoDto;
 import com.luisoliveira.ger_orcamentos.dto.QuadroConcorrenciaDto;
+import com.luisoliveira.ger_orcamentos.dto.QuadroMetaDadosDto;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFColor;
@@ -124,14 +125,27 @@ public class ExcelExportService {
          }
 
          // --- BLOCO 1: CABEÇALHO DA OBRA ---
+         // Extrai os metadados do DTO recebido
+         QuadroMetaDadosDto meta = comparativo.getMetadados();
+
+         //Salva dados do DTO e verifica se é nulo, se sim deixa uma string salva
+         String nomeObra = (meta != null && meta.nomeObra() != null) ? meta.nomeObra() : "OBRA NÃO INFORMADA";
+         String numeroQuadro = (meta != null && meta.numeroQuadro() != null) ? meta.numeroQuadro() : "QC-001";
+         String nomeCliente = (meta != null && meta.nomeCliente() != null) ? meta.nomeCliente() : "";
+         String cnpjCliente = (meta != null && meta.cnpjCliente() != null) ? " - CNPJ: " + meta.cnpjCliente() : "";
+         String clienteCnpjFormatado = nomeCliente + cnpjCliente;
+         String dataFormatada = (meta != null && meta.dataElaboracao() != null)
+                 ? meta.dataElaboracao().format(DateTimeFormatter.ofPattern("dd/MM/yy"))
+                 : LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yy"));
+
          createHeaderLabel(sheet, 0, 0, "Data", headerTealStyle);
-         createHeaderLabel(sheet, 0, 1, LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yy")), centerBoldStyle);
-         createHeaderLabel(sheet, 0, 2, "CASA ALTO DE PINHEIROS", centerBoldStyle);
+         createHeaderLabel(sheet, 0, 1, dataFormatada, centerBoldStyle);
+         createHeaderLabel(sheet, 0, 2, nomeObra, centerBoldStyle);
          sheet.addMergedRegion(new CellRangeAddress(0, 0, 2, 3));
 
          createHeaderLabel(sheet, 1, 0, "Nº Quadro", headerTealStyle);
-         createHeaderLabel(sheet, 1, 1, "QC- 017", centerBoldStyle);
-         createHeaderLabel(sheet, 1, 2, "EVEN DIÓGENES - CNPJ: 18.247.215/0001-77", centerBoldStyle);
+         createHeaderLabel(sheet, 1, 1, numeroQuadro, centerBoldStyle);
+         createHeaderLabel(sheet, 1, 2, clienteCnpjFormatado, centerBoldStyle);
          sheet.addMergedRegion(new CellRangeAddress(1, 1, 2, 3));
 
          createHeaderLabel(sheet, 2, 0, "QUADRO DE CONCORRÊNCIA - MATERIAIS DA OBRA", titleStyle);
@@ -153,15 +167,23 @@ public class ExcelExportService {
             int colInicio = colFornec;
             int colFim = colFornec + 1;
 
+            // verificar se dados do dto são nulos, se sim deixar padrão
+            String nomeFornecedor = (orc != null && orc.getNomeFornecedor() != null) ? orc.getNomeFornecedor() : "";
+            String nomeContato = (orc != null && orc.getNomeContato() != null) ? orc.getNomeContato() : "";
+            String telefoneContato = (orc != null && orc.getTelefoneContato() != null) ? orc.getTelefoneContato() : "";
+            String celularContato = (orc != null && orc.getCelularContato() != null) ? orc.getCelularContato() : "";
+            String localCidade = (orc != null && orc.getLocalCidade() != null) ? orc.getLocalCidade().toString() : "";
+            String emailContato = (orc != null && orc.getEmailContato() != null) ? orc.getEmailContato() : "";
+
             createHeaderLabel(sheet, 0, colInicio, String.valueOf(idx + 1), headerTealStyle);
             sheet.addMergedRegion(new CellRangeAddress(0, 0, colInicio, colFim));
 
-            setMergedValue(sheet, workbook, 1, colInicio, colFim, orc.getNomeFornecedor() != null ? orc.getNomeFornecedor() : "", fontBlackBold);
-            setMergedValue(sheet, workbook, 2, colInicio, colFim, "-", fontNormal);
-            setMergedValue(sheet, workbook, 3, colInicio, colFim, "-", fontNormal);
-            setMergedValue(sheet, workbook, 4, colInicio, colFim, "-", fontNormal);
-            setMergedValue(sheet, workbook, 5, colInicio, colFim, "SÃO PAULO / SP", fontNormal);
-            setMergedValue(sheet, workbook, 6, colInicio, colFim, "-", fontNormal);
+            setMergedValue(sheet, workbook, 1, colInicio, colFim, nomeFornecedor, fontBlackBold);
+            setMergedValue(sheet, workbook, 2, colInicio, colFim, nomeContato, fontNormal);
+            setMergedValue(sheet, workbook, 3, colInicio, colFim, telefoneContato, fontNormal);
+            setMergedValue(sheet, workbook, 4, colInicio, colFim, celularContato, fontNormal);
+            setMergedValue(sheet, workbook, 5, colInicio, colFim, localCidade, fontNormal);
+            setMergedValue(sheet, workbook, 6, colInicio, colFim, emailContato, fontNormal);
 
             colFornec += 2;
          }

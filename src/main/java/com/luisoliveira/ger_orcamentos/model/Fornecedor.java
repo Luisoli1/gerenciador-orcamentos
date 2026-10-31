@@ -21,17 +21,19 @@ public class Fornecedor implements Serializable {
     private String nomeContato;
     private String emailContato;
     private String telefoneContato;
+    private String celularContato;
     private String localCidade;
 
     @OneToMany(mappedBy = "fornecedor", cascade = CascadeType.ALL)
     private List<Orcamento> orcamentos = new ArrayList<>();
 
-    public Fornecedor(String nome, String cnpj, String nomeContato, String emailContato, String telefoneContato, String localCidade) {
+    public Fornecedor(String nome, String cnpj, String nomeContato, String emailContato, String telefoneContato, String celularContato, String localCidade) {
         this.nome = nome;
         this.cnpj = cnpj;
         this.nomeContato = nomeContato;
         this.emailContato = emailContato;
         this.telefoneContato = telefoneContato;
+        this.celularContato = celularContato;
         this.localCidade = localCidade;
     }
 
@@ -80,6 +82,14 @@ public class Fornecedor implements Serializable {
 
     public void setTelefoneContato(String telefoneContato) {
         this.telefoneContato = telefoneContato;
+    }
+
+    public String getCelularContato() {
+        return celularContato;
+    }
+
+    public void setCelularContato(String celularContato) {
+        this.celularContato = celularContato;
     }
 
     public String getLocalCidade() {

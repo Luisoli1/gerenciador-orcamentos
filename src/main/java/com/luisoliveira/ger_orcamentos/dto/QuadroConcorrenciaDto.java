@@ -11,6 +11,7 @@ public class QuadroConcorrenciaDto {
     private String cnpjFornecedor;// Novo campo extraído pela IA
     private String nomeContato;
     private String telefoneContato;
+    private String celularContato;
     private String emailContato;
     private String numeroOrcamento;
     private String localCidade;
@@ -26,11 +27,12 @@ public class QuadroConcorrenciaDto {
     public QuadroConcorrenciaDto() {
     }
 
-    public QuadroConcorrenciaDto(String nomeFornecedor, String cnpjFornecedor, String nomeContato, String telefoneContato , String emailContato ,String numeroOrcamento, String localCidade, LocalDate dataEmissao, BigDecimal valorTotalGeral, LocalDate dataValidade, BigDecimal valorTotalMercadoria, BigDecimal valorTotalIpi, List<ItemQuadroDTO> itens) {
+    public QuadroConcorrenciaDto(String nomeFornecedor, String cnpjFornecedor, String nomeContato, String telefoneContato, String celularContato, String emailContato ,String numeroOrcamento, String localCidade, LocalDate dataEmissao, BigDecimal valorTotalGeral, LocalDate dataValidade, BigDecimal valorTotalMercadoria, BigDecimal valorTotalIpi, List<ItemQuadroDTO> itens) {
         this.nomeFornecedor = nomeFornecedor;
         this.cnpjFornecedor = cnpjFornecedor;
         this.nomeContato = nomeContato;
         this.telefoneContato = telefoneContato;
+        this.celularContato = celularContato;
         this.emailContato = emailContato;
         this.numeroOrcamento = numeroOrcamento;
         this.localCidade = localCidade;
@@ -112,6 +114,14 @@ public class QuadroConcorrenciaDto {
 
     public void setTelefoneContato(String telefoneContato) {
         this.telefoneContato = telefoneContato;
+    }
+
+    public String getCelularContato() {
+        return celularContato;
+    }
+
+    public void setCelularContato(String celularContato) {
+        this.celularContato = celularContato;
     }
 
     public String getNomeContato() {

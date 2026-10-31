@@ -45,7 +45,8 @@ public class GeminiClient {
                         "  \"nomeFornecedor\": \"String\",\n" +
                         "  \"cnpjFornecedor\": \"String\",\n" +
                         "  \"nomeContato (nome do vendedor/representante)\n" +
-                        "  \"telefoneContato (telefone ou celular)\n" +
+                        "  \"telefoneContato (telefone) \n" +
+                        "  \"celularContato (numero celular/ se houver) \n" +
                         "  \"emailContato\n" +
                         "  \"numeroOrcamento\": \"String\",\n" +
                         "  \"localCidade\": \"String\n" +

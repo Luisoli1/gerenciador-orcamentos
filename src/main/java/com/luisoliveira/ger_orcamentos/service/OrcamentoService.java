@@ -1,17 +1,23 @@
 package com.luisoliveira.ger_orcamentos.service;
 
+import com.luisoliveira.ger_orcamentos.dto.ItemQuadroDTO;
+import com.luisoliveira.ger_orcamentos.dto.ItemVariacaoDto;
 import com.luisoliveira.ger_orcamentos.dto.QuadroComparativoDto;
 import com.luisoliveira.ger_orcamentos.dto.QuadroConcorrenciaDto;
+import com.luisoliveira.ger_orcamentos.dto.QuadroMetaDadosDto;
 import com.luisoliveira.ger_orcamentos.model.Fornecedor;
 import com.luisoliveira.ger_orcamentos.model.ItemOrcamento;
+import com.luisoliveira.ger_orcamentos.model.Obra;
 import com.luisoliveira.ger_orcamentos.model.Orcamento;
 import com.luisoliveira.ger_orcamentos.repositories.FornecedorRepository;
 import com.luisoliveira.ger_orcamentos.repositories.ItemOrcamentoRepository;
+import com.luisoliveira.ger_orcamentos.repositories.ObraRepository;
 import com.luisoliveira.ger_orcamentos.repositories.OrcamentoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -21,34 +27,93 @@ import java.util.stream.Collectors;
 public class OrcamentoService {
 
     private final AiExtratorService aiExtratorService;
-
     private final OrcamentoRepository orcamentoRepository;
-
     private final FornecedorRepository fornecedorRepository;
+    private final ObraRepository obraRepository; // Adicionado repositório de obra
 
-    public OrcamentoService(AiExtratorService aiExtratorService, OrcamentoRepository orcamentoRepository, FornecedorRepository fornecedorRepository) {
+    @Autowired
+    private ItemOrcamentoRepository itemOrcamentoRepository;
+
+    // Construtor atualizado com a injeção do ObraRepository
+    public OrcamentoService(AiExtratorService aiExtratorService,
+                            OrcamentoRepository orcamentoRepository,
+                            FornecedorRepository fornecedorRepository,
+                            ObraRepository obraRepository) {
         this.aiExtratorService = aiExtratorService;
         this.orcamentoRepository = orcamentoRepository;
         this.fornecedorRepository = fornecedorRepository;
+        this.obraRepository = obraRepository;
+    }
+
+    public List<ItemVariacaoDto> analisarVariacoesPreco(MultipartFile file) {
+        QuadroConcorrenciaDto quadroConcorrenciaDto = aiExtratorService.extrairDados(file);
+
+        String cnpjFornecedor = quadroConcorrenciaDto.getCnpjFornecedor();
+        List<ItemVariacaoDto> listaVariacoes = new ArrayList<>();
+
+        for(ItemQuadroDTO itemAtual: quadroConcorrenciaDto.getItens()){
+            List<ItemOrcamento> itemAnteriorOpt = itemOrcamentoRepository.buscarHistoricoPorFornecedoretem(
+                    cnpjFornecedor,
+                    itemAtual.descricao()
+            );
+
+            if(!itemAnteriorOpt.isEmpty()){
+                ItemOrcamento itemAnterior = itemAnteriorOpt.get(0);
+
+                boolean precoFoiAlterado = itemAtual.valorUnitario().compareTo(itemAnterior.getValorUnitario()) != 0;
+
+                if(precoFoiAlterado) {
+                    ItemVariacaoDto variacao = new ItemVariacaoDto(
+                            quadroConcorrenciaDto.getNomeFornecedor(),
+                            itemAtual.descricao(),
+                            itemAtual.valorUnitario(),
+                            itemAnterior.getValorUnitario(),
+                            itemAnterior.getOrcamento().getNumeroOrcamento(),
+                            itemAnterior.getOrcamento().getDataEmissao()
+                    );
+
+                    listaVariacoes.add(variacao);
+                }
+            }
+        }
+
+        return listaVariacoes;
     }
 
     public QuadroConcorrenciaDto processarUploadOrcamento(MultipartFile file) {
-        // Delega para o serviço de IA extrair os dados do PDF de forma inteligente
         QuadroConcorrenciaDto dto = aiExtratorService.extrairDados(file);
-
         salvarOrcamentoNoBanco(dto);
         return dto;
     }
 
-    public QuadroComparativoDto processarMultiplos(List<MultipartFile> files) {
+    // Método principal atualizado para receber o obraId e gerar os metadados dinâmicos
+    public QuadroComparativoDto processarMultiplosComObra(Long obraId, List<MultipartFile> files) {
+        // 1. Busca a obra cadastrada no banco
+        Obra obra = obraRepository.findById(obraId)
+                .orElseThrow(() -> new RuntimeException("Obra não encontrada com ID: " + obraId));
+
+        // 2. Gera o número sequencial do QC (ex: QC-001) baseado no contador da obra
+        String numeroQcFormatado = String.format("QC-%03d", obra.getProximoNumeroQc());
+
+        // 3. Incrementa o contador para a próxima vez e salva na obra
+        obra.setProximoNumeroQc(obra.getProximoNumeroQc() + 1);
+        obraRepository.save(obra);
+
+        // 4. Cria o DTO de metadados para o relatório
+        QuadroMetaDadosDto metadados = new QuadroMetaDadosDto(
+                obra.getNomeObra(),
+                numeroQcFormatado,
+                obra.getNomeCliente(),
+                obra.getCnpjCliente(),
+                LocalDate.now()
+        );
+
+        // 5. Processamento normal dos orçamentos
         List<QuadroConcorrenciaDto> listaOrcamentos = new ArrayList<>();
 
         for (MultipartFile file : files) {
             QuadroConcorrenciaDto dto = aiExtratorService.extrairDados(file);
-
-            // Guarda cada orçamento individualmente no histórico
             salvarOrcamentoNoBanco(dto);
-
             listaOrcamentos.add(dto);
         }
 
@@ -63,13 +128,11 @@ public class OrcamentoService {
 
         String observacao = "Vencedor determinado pelo Valor Total Geral";
 
-        return new QuadroComparativoDto(listaOrcamentos, nomeVencedor, observacao);
-
+        // 6. Retorna utilizando o construtor que aceita os metadados
+        return new QuadroComparativoDto(metadados, listaOrcamentos, nomeVencedor, observacao);
     }
 
     private void salvarOrcamentoNoBanco(QuadroConcorrenciaDto dto){
-
-        // 1. Procura se o fornecedor já existe na base de dados para evitar duplicados
         Fornecedor fornecedor = null;
 
         if (dto.getCnpjFornecedor() != null && !dto.getCnpjFornecedor().isBlank()) {
@@ -80,15 +143,20 @@ public class OrcamentoService {
             fornecedor = fornecedorRepository.findByNome(dto.getNomeFornecedor()).orElse(null);
         }
 
-        // Se não existir, criamos um novo objeto (o CascadeType.PERSIST vai gravá-lo automaticamente)
         if (fornecedor == null) {
-            fornecedor = new Fornecedor();
-            fornecedor.setNome(dto.getNomeFornecedor());
-            fornecedor.setCnpj(dto.getCnpjFornecedor());
+            Fornecedor novoFornecedor = new Fornecedor(
+                    dto.getNomeFornecedor(),
+                    dto.getCnpjFornecedor(),
+                    dto.getNomeContato(),
+                    dto.getEmailContato(),
+                    dto.getTelefoneContato(),
+                    dto.getLocalCidade()
+            );
+            fornecedor = fornecedorRepository.save(novoFornecedor);
         }
 
         Orcamento orcamento = new Orcamento();
-        orcamento.setFornecedor(new Fornecedor(dto.getNomeFornecedor(), dto.getCnpjFornecedor()));
+        orcamento.setFornecedor(fornecedor);
         orcamento.setNumeroOrcamento(dto.getNumeroOrcamento());
         orcamento.setDataEmissao(dto.getDataEmissao());
         orcamento.setDataValidade(dto.getDataValidade());
@@ -105,7 +173,6 @@ public class OrcamentoService {
                 item.setDescricao(itemQuadroDTO.descricao());
                 item.setUnidadeDeMedida(itemQuadroDTO.unidadeMedida());
                 item.setValorUnitario(itemQuadroDTO.valorUnitario());
-                item.setValorTotal(itemQuadroDTO.valorTotal());
                 item.setAliquotaIpi(itemQuadroDTO.aliquotaIpi());
                 item.setOrcamento(orcamento);
                 return item;

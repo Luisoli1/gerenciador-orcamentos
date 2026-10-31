@@ -4,13 +4,20 @@ import java.util.List;
 
 public class QuadroComparativoDto {
 
+    private QuadroMetaDadosDto metadados;
     private List<QuadroConcorrenciaDto> orcamentos;
     private String fornecedorVencedor;
     private String observacao;
 
-    public QuadroComparativoDto() {
-    }
+    public QuadroComparativoDto() {}
 
+    public QuadroComparativoDto(QuadroMetaDadosDto metadados, List<QuadroConcorrenciaDto> orcamentos, String fornecedorVencedor, String observacao) {
+        this.metadados = metadados;
+        this.orcamentos = orcamentos;
+        this.fornecedorVencedor = fornecedorVencedor;
+        this.observacao = observacao;
+    }
+    // Construtor antigo para manter compatibilidade com o service atual
     public QuadroComparativoDto(List<QuadroConcorrenciaDto> orcamentos, String fornecedorVencedor, String observacao) {
         this.orcamentos = orcamentos;
         this.fornecedorVencedor = fornecedorVencedor;
@@ -18,6 +25,14 @@ public class QuadroComparativoDto {
     }
 
     // Getters e Setters
+    public QuadroMetaDadosDto getMetadados() {
+        return metadados;
+    }
+
+    public void setMetadados(QuadroMetaDadosDto metadados) {
+        this.metadados = metadados;
+    }
+
     public List<QuadroConcorrenciaDto> getOrcamentos() {
         return orcamentos;
     }
@@ -42,4 +57,3 @@ public class QuadroComparativoDto {
         this.observacao = observacao;
     }
 }
-

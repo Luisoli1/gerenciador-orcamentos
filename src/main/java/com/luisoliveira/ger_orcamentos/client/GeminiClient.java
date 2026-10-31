@@ -44,7 +44,11 @@ public class GeminiClient {
                         "{\n" +
                         "  \"nomeFornecedor\": \"String\",\n" +
                         "  \"cnpjFornecedor\": \"String\",\n" +
+                        "  \"nomeContato (nome do vendedor/representante)\n" +
+                        "  \"telefoneContato (telefone ou celular)\n" +
+                        "  \"emailContato\n" +
                         "  \"numeroOrcamento\": \"String\",\n" +
+                        "  \"localCidade\": \"String\n" +
                         "  \"dataEmissao\": \"String yyyy-MM-dd\",\n" +
                         "  \"dataValidade\": \"String yyyy-MM-dd\",\n" +
                         "  \"valorTotalMercadoria\": \"BigDecimal\",\n" +

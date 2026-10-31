@@ -47,6 +47,10 @@ public class ItemOrcamento implements Serializable {
         this.aliquotaIpi = aliquotaIpi;
     }
 
+    public Long getId() {
+        return id;
+    }
+
     public String getMarca() {
         return marca;
     }

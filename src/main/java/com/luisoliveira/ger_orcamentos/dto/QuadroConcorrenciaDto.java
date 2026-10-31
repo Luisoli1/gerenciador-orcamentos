@@ -8,8 +8,12 @@ import java.util.List;
 public class QuadroConcorrenciaDto {
 
     private String nomeFornecedor;
-    private String cnpjFornecedor; // Novo campo extraído pela IA
+    private String cnpjFornecedor;// Novo campo extraído pela IA
+    private String nomeContato;
+    private String telefoneContato;
+    private String emailContato;
     private String numeroOrcamento;
+    private String localCidade;
     private LocalDate dataEmissao;
     private LocalDate dataValidade;
     private BigDecimal valorTotalGeral;
@@ -22,10 +26,14 @@ public class QuadroConcorrenciaDto {
     public QuadroConcorrenciaDto() {
     }
 
-    public QuadroConcorrenciaDto(String nomeFornecedor, String cnpjFornecedor, String numeroOrcamento, LocalDate dataEmissao, BigDecimal valorTotalGeral, LocalDate dataValidade, BigDecimal valorTotalMercadoria, BigDecimal valorTotalIpi, List<ItemQuadroDTO> itens) {
+    public QuadroConcorrenciaDto(String nomeFornecedor, String cnpjFornecedor, String nomeContato, String telefoneContato , String emailContato ,String numeroOrcamento, String localCidade, LocalDate dataEmissao, BigDecimal valorTotalGeral, LocalDate dataValidade, BigDecimal valorTotalMercadoria, BigDecimal valorTotalIpi, List<ItemQuadroDTO> itens) {
         this.nomeFornecedor = nomeFornecedor;
         this.cnpjFornecedor = cnpjFornecedor;
+        this.nomeContato = nomeContato;
+        this.telefoneContato = telefoneContato;
+        this.emailContato = emailContato;
         this.numeroOrcamento = numeroOrcamento;
+        this.localCidade = localCidade;
         this.dataEmissao = dataEmissao;
         this.valorTotalGeral = valorTotalGeral;
         this.dataValidade = dataValidade;
@@ -48,6 +56,14 @@ public class QuadroConcorrenciaDto {
 
     public void setNumeroOrcamento(String numeroOrcamento) {
         this.numeroOrcamento = numeroOrcamento;
+    }
+
+    public String getLocalCidade() {
+        return localCidade;
+    }
+
+    public void setLocalCidade(String localCidade) {
+        this.localCidade = localCidade;
     }
 
     public LocalDate getDataEmissao() {
@@ -80,6 +96,30 @@ public class QuadroConcorrenciaDto {
 
     public void setCnpjFornecedor(String cnpjFornecedor) {
         this.cnpjFornecedor = cnpjFornecedor;
+    }
+
+    public String getEmailContato() {
+        return emailContato;
+    }
+
+    public void setEmailContato(String emailContato) {
+        this.emailContato = emailContato;
+    }
+
+    public String getTelefoneContato() {
+        return telefoneContato;
+    }
+
+    public void setTelefoneContato(String telefoneContato) {
+        this.telefoneContato = telefoneContato;
+    }
+
+    public String getNomeContato() {
+        return nomeContato;
+    }
+
+    public void setNomeContato(String nomeContato) {
+        this.nomeContato = nomeContato;
     }
 
     public List<ItemQuadroDTO> getItens() {

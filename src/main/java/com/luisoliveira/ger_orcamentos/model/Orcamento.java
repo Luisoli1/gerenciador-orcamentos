@@ -26,7 +26,7 @@ public class Orcamento implements Serializable {
     private BigDecimal valorTotalIpi;
 
 
-    @ManyToOne(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @ManyToOne
     @JoinColumn(name = "fornecedor_id")
     private Fornecedor fornecedor;
 
@@ -45,11 +45,15 @@ public class Orcamento implements Serializable {
     public Orcamento() {
     }
 
-    public Orcamento( String numeroOrcamento, LocalDate dataEmissao, LocalDate dataValidade, BigDecimal valorTotal) {
+    public Orcamento(String numeroOrcamento,  LocalDate dataEmissao, LocalDate dataValidade, BigDecimal valorTotal, BigDecimal valorTotalMercadoria, BigDecimal valorTotalIpi, Fornecedor fornecedor, List<ItemOrcamento> itens) {
         this.numeroOrcamento = numeroOrcamento;
         this.dataEmissao = dataEmissao;
         this.dataValidade = dataValidade;
         this.valorTotal = valorTotal;
+        this.valorTotalMercadoria = valorTotalMercadoria;
+        this.valorTotalIpi = valorTotalIpi;
+        this.fornecedor = fornecedor;
+        this.itens = itens;
     }
 
     public BigDecimal getValorTotalMercadoria() {
@@ -58,6 +62,10 @@ public class Orcamento implements Serializable {
 
     public void setValorTotalMercadoria(BigDecimal valorTotalMercadoria) {
         this.valorTotalMercadoria = valorTotalMercadoria;
+    }
+
+    public Long getId() {
+        return id;
     }
 
     public BigDecimal getValorTotalIpi() {

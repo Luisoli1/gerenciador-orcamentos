@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 @RestController
 @RequestMapping("/api/qc")
@@ -104,14 +105,12 @@ public class QcController {
             @PathVariable Long id,
             @RequestBody RestaurarItemDto dto) {
         try {
-            boolean restaurado = qcService.restaurarItem(id, dto);
-            if (restaurado) {
-                return ResponseEntity.ok(Map.of("sucesso", true, "mensagem", "Item restaurado com sucesso"));
-            } else {
-                return ResponseEntity.badRequest().body(Map.of("sucesso", false, "mensagem", "Não foi possível localizar o item para restauração"));
-            }
+            String mensagem = qcService.restaurarItem(id, dto);
+            return ResponseEntity.ok(Map.of("sucesso", true, "mensagem", mensagem));
+        } catch (NoSuchElementException | IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("sucesso", false, "mensagem", e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(Map.of("sucesso", false, "mensagem", "Erro ao restaurar item: " + e.getMessage()));
+            return ResponseEntity.internalServerError().body(Map.of("sucesso", false, "mensagem", "Erro interno ao restaurar item: " + e.getMessage()));
         }
     }
 

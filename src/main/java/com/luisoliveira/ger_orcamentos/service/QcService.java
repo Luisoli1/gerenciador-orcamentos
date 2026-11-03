@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.NoSuchElementException;
 
 @Service
 public class QcService {
@@ -468,12 +469,40 @@ public class QcService {
     }
 
     @Transactional
-    public boolean restaurarItem(Long qcId, RestaurarItemDto dto) {
+    public String restaurarItem(Long qcId, RestaurarItemDto dto) {
         Qc qc = qcRepository.findById(qcId).orElse(null);
-        if (qc == null) return false;
+
+        // Fallback: se o QC com aquele ID numérico antigo não existir mais no banco
+        if (qc == null) {
+            List<Qc> todosQcs = qcRepository.findAll();
+            if (todosQcs.isEmpty()) {
+                throw new NoSuchElementException(
+                    "O Quadro Comparativo deste registro (QC ID " + qcId + ") não existe no sistema porque os QCs foram limpos para a apresentação.\n\nCrie uma nova cotação e faça uma alteração nela para testar a restauração em um registro ativo."
+                );
+            }
+            // Se houver QCs ativos, verifica se algum possui o item correspondente
+            for (Qc candidato : todosQcs) {
+                List<Orcamento> orcsCandidato = orcamentoRepository.findByQcId(candidato.getId());
+                boolean temItem = orcsCandidato.stream()
+                        .flatMap(o -> o.getItens().stream())
+                        .anyMatch(it -> itensIguais(it.getDescricao(), dto.item()));
+                if (temItem) {
+                    qc = candidato;
+                    qcId = candidato.getId();
+                    break;
+                }
+            }
+            if (qc == null) {
+                throw new NoSuchElementException(
+                    "O Quadro Comparativo (QC ID " + qcId + ") deste histórico não existe mais no banco de dados (ele foi excluído anteriormente)."
+                );
+            }
+        }
 
         List<Orcamento> orcamentos = orcamentoRepository.findByQcId(qcId);
-        if (orcamentos == null || orcamentos.isEmpty()) return false;
+        if (orcamentos == null || orcamentos.isEmpty()) {
+            throw new NoSuchElementException("O Quadro Comparativo " + qc.getNumeroQuadro() + " não possui orçamentos/fornecedores cadastrados.");
+        }
 
         String itemBuscado = dto.item() != null ? dto.item().trim() : "";
         String campo = dto.campo() != null ? dto.campo().trim() : "";
@@ -482,11 +511,12 @@ public class QcService {
         String valorAtual = dto.valorAtual() != null ? dto.valorAtual().trim() : "";
 
         boolean alterou = false;
+        boolean itemEncontrado = false;
 
         for (Orcamento orc : orcamentos) {
             if (fornecedorBuscado != null && !fornecedorBuscado.isEmpty() && orc.getFornecedor() != null) {
                 String nomeForn = orc.getFornecedor().getNome();
-                if (nomeForn != null && !nomeForn.equalsIgnoreCase(fornecedorBuscado)) {
+                if (nomeForn != null && !fornecedoresIguais(nomeForn, fornecedorBuscado)) {
                     // Para preço unitário, marca ou IPI, altera apenas no fornecedor especificado
                     if (!campo.equalsIgnoreCase("Quantidade") && !campo.toLowerCase().contains("descri")) {
                         continue;
@@ -495,7 +525,8 @@ public class QcService {
             }
 
             for (ItemOrcamento item : orc.getItens()) {
-                if (item.getDescricao() != null && item.getDescricao().trim().equalsIgnoreCase(itemBuscado)) {
+                if (itensIguais(item.getDescricao(), itemBuscado)) {
+                    itemEncontrado = true;
                     if (campo.equalsIgnoreCase("Quantidade")) {
                         BigDecimal novaQtd = extrairNumero(valorAntigo);
                         if (novaQtd != null) {
@@ -552,32 +583,64 @@ public class QcService {
             }
         }
 
-        if (alterou) {
-            orcamentoRepository.flush();
-            String numQc = qc.getNumeroQuadro() != null ? qc.getNumeroQuadro() : ("#" + qcId);
-            String fornInfo = (fornecedorBuscado != null && !fornecedorBuscado.isEmpty()) ? (" (" + fornecedorBuscado + ")") : "";
-            String detalhes = "QC " + numQc + ": Reverteu " + itemBuscado + fornInfo + " [" + campo + "] de '" + valorAtual + "' para '" + valorAntigo + "'";
-
-            List<DiffItemDto> restorationDiff = List.of(new DiffItemDto(
-                    itemBuscado,
-                    fornecedorBuscado,
-                    campo,
-                    valorAtual,
-                    valorAntigo
-            ));
-            String diffJson = null;
-            try {
-                ObjectMapper mapper = new ObjectMapper();
-                diffJson = mapper.writeValueAsString(restorationDiff);
-            } catch (Exception e) {
-                System.err.println("Erro ao serializar diff de restauração: " + e.getMessage());
-            }
-
-            auditoriaService.registrar("RESTAURACAO", "QC", qcId.toString(), detalhes, diffJson);
-            return true;
+        if (!itemEncontrado) {
+            throw new NoSuchElementException("O material '" + itemBuscado + "' não foi localizado nos itens deste Quadro Comparativo.");
         }
 
-        return false;
+        if (!alterou) {
+            throw new IllegalArgumentException("Não foi possível interpretar o valor anterior '" + valorAntigo + "' para o campo " + campo + ".");
+        }
+
+        orcamentoRepository.flush();
+        String numQc = qc.getNumeroQuadro() != null ? qc.getNumeroQuadro() : ("#" + qcId);
+        String fornInfo = (fornecedorBuscado != null && !fornecedorBuscado.isEmpty()) ? (" (" + fornecedorBuscado + ")") : "";
+        String detalhes = "QC " + numQc + ": Reverteu " + itemBuscado + fornInfo + " [" + campo + "] de '" + valorAtual + "' para '" + valorAntigo + "'";
+
+        List<DiffItemDto> restorationDiff = List.of(new DiffItemDto(
+                itemBuscado,
+                fornecedorBuscado,
+                campo,
+                valorAtual,
+                valorAntigo
+        ));
+        String diffJson = null;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            diffJson = mapper.writeValueAsString(restorationDiff);
+        } catch (Exception e) {
+            System.err.println("Erro ao serializar diff de restauração: " + e.getMessage());
+        }
+
+        auditoriaService.registrar("RESTAURACAO", "QC", qcId.toString(), detalhes, diffJson);
+        return "Item '" + itemBuscado + "' restaurado com sucesso para '" + valorAntigo + "' no QC " + numQc + "!";
+    }
+
+    private boolean itensIguais(String s1, String s2) {
+        if (s1 == null || s2 == null) return false;
+        if (s1.trim().equalsIgnoreCase(s2.trim())) return true;
+        String n1 = java.text.Normalizer.normalize(s1, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replaceAll("[\"'`´]", "")
+                .replaceAll("\\s+", " ")
+                .trim().toLowerCase();
+        String n2 = java.text.Normalizer.normalize(s2, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replaceAll("[\"'`´]", "")
+                .replaceAll("\\s+", " ")
+                .trim().toLowerCase();
+        return n1.equals(n2) || n1.contains(n2) || n2.contains(n1);
+    }
+
+    private boolean fornecedoresIguais(String f1, String f2) {
+        if (f1 == null || f2 == null) return false;
+        if (f1.trim().equalsIgnoreCase(f2.trim())) return true;
+        String n1 = java.text.Normalizer.normalize(f1, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .trim().toLowerCase();
+        String n2 = java.text.Normalizer.normalize(f2, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .trim().toLowerCase();
+        return n1.equals(n2) || n1.contains(n2) || n2.contains(n1);
     }
 
     private BigDecimal extrairNumero(String texto) {

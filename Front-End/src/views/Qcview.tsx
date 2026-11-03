@@ -1249,6 +1249,25 @@ Equipe de Suprimentos - Makinsthal`;
           </div>
         </div>
 
+        {loading && (
+          <div className="p-6 bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-slate-900 border border-blue-500/40 rounded-2xl flex items-center justify-center gap-4 shadow-xl animate-pulse">
+            <div className="p-3 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/30 shrink-0">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                <span>Processando Cotações com Inteligência Artificial...</span>
+                <span className="text-[10px] font-mono bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30">
+                  {files.length} {files.length === 1 ? 'proposta' : 'propostas em paralelo'}
+                </span>
+              </h4>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Extraindo dados das propostas comerciais, equalizando materiais e calculando os melhores preços. Aguarde alguns segundos...
+              </p>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="p-3 bg-red-950/40 border border-red-800 text-red-400 rounded-xl text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />

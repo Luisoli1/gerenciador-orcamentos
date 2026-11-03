@@ -136,35 +136,47 @@ public class QcService {
 
     @Transactional
     public boolean deletar(Long id) {
-        if (!qcRepository.existsById(id)) {
+        Qc qc = qcRepository.findById(id).orElse(null);
+        if (qc == null) {
             return false;
         }
 
-        // 1. Desvincula qualquer Faturamento Direto apontando para este QC
-        List<FaturamentoDireto> fds = faturamentoDiretoRepository.findByQcId(id);
+        String num = qc.getNumeroQuadro();
+        // Se for um QC principal (ex: QC-001), exclui primeiro todos os QCs filhos/derivados (ex: QC-001-ELECON)
+        if (num != null && (!num.contains("-") || num.matches("^QC-\\d+$"))) {
+            List<Qc> todosDaObra = qc.getObra() != null ? qcRepository.findByObraId(qc.getObra().getId()) : List.of();
+            for (Qc outro : todosDaObra) {
+                if (outro.getId() != null && !outro.getId().equals(id) && outro.getNumeroQuadro() != null && outro.getNumeroQuadro().startsWith(num + "-")) {
+                    excluirQcEAssociacoes(outro.getId());
+                }
+            }
+        }
+
+        excluirQcEAssociacoes(id);
+        return true;
+    }
+
+    private void excluirQcEAssociacoes(Long qcId) {
+        // 1. Desvincula todos os Faturamentos Diretos apontando para este QC
+        List<FaturamentoDireto> fds = faturamentoDiretoRepository.findByQcId(qcId);
         if (fds != null && !fds.isEmpty()) {
             for (FaturamentoDireto fd : fds) {
                 fd.setQc(null);
                 faturamentoDiretoRepository.save(fd);
             }
+            faturamentoDiretoRepository.flush();
         }
 
-        // 2. Se for um QC principal, desvincula ou remove QCs derivados filhos (ex: QC-001-ELECON)
-        Qc qc = qcRepository.findById(id).orElse(null);
-        if (qc != null) {
-            String num = qc.getNumeroQuadro();
-            if (num != null && (!num.contains("-") || num.matches("^QC-\\d+$"))) {
-                List<Qc> todosDaObra = qc.getObra() != null ? qcRepository.findByObraId(qc.getObra().getId()) : List.of();
-                for (Qc outro : todosDaObra) {
-                    if (outro.getId() != null && !outro.getId().equals(id) && outro.getNumeroQuadro() != null && outro.getNumeroQuadro().startsWith(num + "-")) {
-                        qcRepository.deleteById(outro.getId());
-                    }
-                }
-            }
+        // 2. Remove os orçamentos e itens vinculados a este QC
+        List<Orcamento> orcs = orcamentoRepository.findByQcId(qcId);
+        if (orcs != null && !orcs.isEmpty()) {
+            orcamentoRepository.deleteAll(orcs);
+            orcamentoRepository.flush();
         }
 
-        qcRepository.deleteById(id);
-        return true;
+        // 3. Remove o QC
+        qcRepository.deleteById(qcId);
+        qcRepository.flush();
     }
 
     @Transactional

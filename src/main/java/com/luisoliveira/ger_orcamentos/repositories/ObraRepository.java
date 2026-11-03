@@ -6,4 +6,12 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ObraRepository extends JpaRepository<Obra, Long> {
+
+    // Verificações isoladas para criação
+    boolean existsByNomeObraIgnoreCase(String nomeObra);
+    boolean existsByCnpjCliente(String cnpjCliente);
+
+    // Verificações isoladas para atualização (ignorando o próprio ID)
+    boolean existsByNomeObraIgnoreCaseAndIdNot(String nomeObra, Long id);
+    boolean existsByCnpjClienteAndIdNot(String cnpjCliente, Long id);
 }

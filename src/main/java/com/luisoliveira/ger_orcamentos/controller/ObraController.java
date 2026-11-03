@@ -1,7 +1,8 @@
 package com.luisoliveira.ger_orcamentos.controller;
 
 import com.luisoliveira.ger_orcamentos.model.Obra;
-import com.luisoliveira.ger_orcamentos.repositories.ObraRepository;
+import com.luisoliveira.ger_orcamentos.service.ObraService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,24 +12,48 @@ import java.util.List;
 @RequestMapping("/api/obras")
 public class ObraController {
 
-    private final ObraRepository obraRepository;
-
-    public ObraController(ObraRepository obraRepository) {
-        this.obraRepository = obraRepository;
-    }
+    @Autowired
+    private ObraService obraService;
 
     @PostMapping
-    public ResponseEntity<Obra> criarObra(@RequestBody Obra obra) {
-        if (obra.getProximoNumeroQc() == null) {
-            obra.setProximoNumeroQc(1L);
+    public ResponseEntity<?> criarObra(@RequestBody Obra obra) {
+        try {
+            Obra novaObra = obraService.criarObra(obra);
+            return ResponseEntity.ok(novaObra);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
-        Obra novaObra = obraRepository.save(obra);
-        return ResponseEntity.ok(novaObra);
     }
 
     @GetMapping
     public ResponseEntity<List<Obra>> listarObras() {
-        List<Obra> obras = obraRepository.findAll();
-        return ResponseEntity.ok(obras);
+        return ResponseEntity.ok(obraService.listarObras());
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Obra> buscarObraPorId(@PathVariable Long id) {
+        return obraService.buscarPorId(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<?> atualizarObra(@PathVariable Long id, @RequestBody Obra obraAtualizada) {
+        try {
+            Obra obraSalva = obraService.atualizarObra(id, obraAtualizada);
+            return ResponseEntity.ok(obraSalva);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deletarObra(@PathVariable Long id) {
+        try {
+            obraService.deletarObra(id);
+            return ResponseEntity.noContent().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 }

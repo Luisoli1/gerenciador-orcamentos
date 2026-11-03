@@ -3,7 +3,7 @@ import type { Obra, Fornecedor, QuadroComparativoDto, Qc, OrcamentoSalvo, ItemVa
 import { salvarArquivo } from '../utils/fileDownloader';
 
 
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
 
 // Interceptor para injetar JWT Token em todas as requisições
 axios.interceptors.request.use((config) => {

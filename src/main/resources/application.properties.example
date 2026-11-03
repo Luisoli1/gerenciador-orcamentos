@@ -13,3 +13,4 @@ spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
 # Google Gemini API Key
 spring.ai.google.genai.api-key=SUA_CHAVE_GEMINI_AQUI
 spring.ai.google.genai.chat.options.model=gemini-3.5-flash-lite
+

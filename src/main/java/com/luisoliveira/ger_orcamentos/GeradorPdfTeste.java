@@ -58,7 +58,7 @@ public class GeradorPdfTeste {
                 y -= 15;
                 cs.beginText();
                 cs.newLineAtOffset(50, y);
-                cs.showText("ORCAMENTO NUMERO: MM-2026-901 | DATA: 2026-11-01 | VALIDADE: 2026-11-15");
+                cs.showText("ORÇAMENTO NÚMERO: MM-2026-901 | DATA: 2026-11-01 | VALIDADE: 2026-11-15");
                 cs.endText();
 
                 y -= 25;
@@ -72,7 +72,7 @@ public class GeradorPdfTeste {
                 cs.beginText();
                 cs.setFont(fontBold, 10);
                 cs.newLineAtOffset(50, y);
-                cs.showText("IT  DESCRICAO                                  UND   QTD    VLR.UNIT     VLR.TOTAL");
+                cs.showText("IT  DESCRIÇÃO                                  UND   QTD    VLR.UNIT     VLR.TOTAL");
                 cs.endText();
 
                 y -= 10;
@@ -81,11 +81,11 @@ public class GeradorPdfTeste {
                 cs.stroke();
 
                 String[][] itens = {
-                    {"1", "Abracadeira D c/ Parafuso GE 2-1/2\"", "PC", "200", "R$ 1,45", "R$ 290,00"},
-                    {"2", "Abracadeira D c/ Parafuso GE 2\"",     "PC", "300", "R$ 0,98", "R$ 294,00"},
+                    {"1", "Abraçadeira D c/ Parafuso GE 2-1/2\"", "PC", "200", "R$ 1,45", "R$ 290,00"},
+                    {"2", "Abraçadeira D c/ Parafuso GE 2\"",     "PC", "300", "R$ 0,98", "R$ 294,00"},
                     {"3", "Porca Sextavada GE 3/8\"",             "PC", "1000", "R$ 0,12", "R$ 120,00"},
                     {"4", "Jaqueta e Cone GE 3/8\"",              "PC", "500", "R$ 0,85", "R$ 425,00"},
-                    {"5", "Vergalhao Rosca Total GE 3/8 x 3mts",  "BRS", "60", "R$ 14,00", "R$ 840,00"},
+                    {"5", "Vergalhão Rosca Total GE 3/8 x 3mts",  "BRS", "60", "R$ 14,00", "R$ 840,00"},
                     {"6", "Parafuso AA Panela Phillips GE 4,8 x 38", "PC", "500", "R$ 0,13", "R$ 65,00"}
                 };
 
@@ -170,7 +170,7 @@ public class GeradorPdfTeste {
                 cs.beginText();
                 cs.setFont(fontBold, 10);
                 cs.newLineAtOffset(50, y);
-                cs.showText("IT  DESCRICAO                                  UND   QTD    VLR.UNIT     VLR.TOTAL");
+                cs.showText("IT  DESCRIÇÃO                                  UND   QTD    VLR.UNIT     VLR.TOTAL");
                 cs.endText();
 
                 y -= 10;
@@ -180,11 +180,11 @@ public class GeradorPdfTeste {
 
                 // OS MESMOS 6 ITENS COM PRECOS DIFERENTES
                 String[][] itens = {
-                    {"1", "Abracadeira D c/ Parafuso GE 2-1/2\"", "PC", "200", "R$ 1,60", "R$ 320,00"},
-                    {"2", "Abracadeira D c/ Parafuso GE 2\"",     "PC", "300", "R$ 0,90", "R$ 270,00"},
+                    {"1", "Abraçadeira D c/ Parafuso GE 2-1/2\"", "PC", "200", "R$ 1,60", "R$ 320,00"},
+                    {"2", "Abraçadeira D c/ Parafuso GE 2\"",     "PC", "300", "R$ 0,90", "R$ 270,00"},
                     {"3", "Porca Sextavada GE 3/8\"",             "PC", "1000", "R$ 0,10", "R$ 100,00"},
                     {"4", "Jaqueta e Cone GE 3/8\"",              "PC", "500", "R$ 0,92", "R$ 460,00"},
-                    {"5", "Vergalhao Rosca Total GE 3/8 x 3mts",  "BRS", "60", "R$ 13,20", "R$ 792,00"},
+                    {"5", "Vergalhão Rosca Total GE 3/8 x 3mts",  "BRS", "60", "R$ 13,20", "R$ 792,00"},
                     {"6", "Parafuso AA Panela Phillips GE 4,8 x 38", "PC", "500", "R$ 0,11", "R$ 55,00"}
                 };
 

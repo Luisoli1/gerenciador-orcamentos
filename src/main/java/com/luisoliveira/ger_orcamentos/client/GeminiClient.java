@@ -37,6 +37,7 @@ public class GeminiClient {
                         "- Se um campo não estiver visível ou seguro, retorne null.\n" +
                         "- Se não encontrar data de validade, considere 5 dias corridos após a data de emissão.\n" +
                         "- Preserve os valores monetários exatamente como apresentados no documento.\n" +
+                        "- Mantenha e aplique a correta ortografia e acentuação da língua portuguesa nas descrições dos materiais e produtos (por exemplo: 'Abraçadeira' e não 'Abracadeira', 'Vergalhão' e não 'Vergalhao', 'Aço' e não 'Aco'), preservando rigorosamente todas as medidas, polegadas, bitolas, códigos e números técnicos.\n" +
                         "- Retorne APENAS um JSON válido, sem Markdown ou explicações.\n" +
                         "\n" +
                         "ESTRUTURA OBRIGATÓRIA DO JSON:\n" +
@@ -44,12 +45,12 @@ public class GeminiClient {
                         "{\n" +
                         "  \"nomeFornecedor\": \"String\",\n" +
                         "  \"cnpjFornecedor\": \"String\",\n" +
-                        "  \"nomeContato (nome do vendedor/representante)\n" +
-                        "  \"telefoneContato (telefone) \n" +
-                        "  \"celularContato (numero celular/ se houver) \n" +
-                        "  \"emailContato\n" +
+                        "  \"nomeContato\": \"String\",\n" +
+                        "  \"telefoneContato\": \"String\",\n" +
+                        "  \"celularContato\": \"String\",\n" +
+                        "  \"emailContato\": \"String\",\n" +
                         "  \"numeroOrcamento\": \"String\",\n" +
-                        "  \"localCidade\": \"String\n" +
+                        "  \"localCidade\": \"String\",\n" +
                         "  \"dataEmissao\": \"String yyyy-MM-dd\",\n" +
                         "  \"dataValidade\": \"String yyyy-MM-dd\",\n" +
                         "  \"valorTotalMercadoria\": \"BigDecimal\",\n" +
@@ -78,11 +79,14 @@ public class GeminiClient {
                         "- Se a alíquota estiver explicitamente zerada, retorne 0.\n" +
                         "- Se não houver informação, retorne null.\n" +
                         "- Não confunda IPI com ICMS ou ST.\n" +
-                        "REGRAS ESPECÍFICAS PARA A MONT MAGNO:\n"+
-                        "CNPJ MONT MAGNO: 62.956.115/0001-01\n"+
-                                "REGRAS ESPECÍFICAS PARA A SOEDRAL:\n" +
-                        "- a virgula pode ser da casa decimal, por exemplo 1,000 é mil\n"+
-                        " - Caso não haja marca na descrição, a marca dos produtos do orçamento mont magno é MONT MAGNO"+
+                        "\n" +
+                        "REGRAS ESPECÍFICAS PARA A MONT MAGNO:\n" +
+                        "CNPJ MONT MAGNO: 62.956.115/0001-01\n" +
+                        "- Caso não haja marca na descrição, a marca dos produtos do orçamento mont magno é MONT MAGNO.\n" +
+                        "\n" +
+                        "REGRAS ESPECÍFICAS PARA A SOEDRAL:\n" +
+                        "- A vírgula pode ser da casa decimal, por exemplo 1,000 é mil.\n" +
+                        "\n" +
                         "REGRAS OBRIGATÓRIAS PARA O RESUMO FINANCEIRO:\n" +
                         "\n" +
                         "ATENÇÃO: O resumo financeiro pode estar localizado no FINAL do documento, separado da tabela de produtos.\n" +
@@ -104,7 +108,8 @@ public class GeminiClient {
                         "- Não utilize apenas a soma dos itens para preencher esses campos.\n" +
                         "- Não some novamente o IPI ao valor total da cotação.\n" +
                         "- Se os valores estiverem impressos no documento, priorize sempre os valores impressos.\n" +
-                        "- Se algum valor realmente não estiver disponível, retorne null." +
+                        "- Se algum valor realmente não estiver disponível, retorne null.\n" +
+                        "\n" +
                         "REGRA DE EXTRAÇÃO DO RESUMO FINANCEIRO:\n" +
                         "\n" +
                         "O resumo financeiro localizado no rodapé do orçamento é uma informação obrigatória da extração.\n" +

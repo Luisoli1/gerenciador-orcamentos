@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { Obra, Fornecedor, QuadroComparativoDto, Qc, OrcamentoSalvo, ItemVariacaoDto, ConflitoQcDto, FaturamentoDireto, Usuario, LoginRequest, LoginResponse, AuditoriaLog, Role } from '../types';
+import { salvarArquivo } from '../utils/fileDownloader';
 
 
 const API_BASE_URL = 'http://localhost:8080/api';
@@ -157,29 +158,17 @@ export const api = {
       responseType: 'blob',
     });
 
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `quadro_concorrencia_obra_${obraId}.xlsx`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    await salvarArquivo(new Blob([response.data]), `quadro_concorrencia_obra_${obraId}.xlsx`);
   },
 
   exportarExcelDireto: async (comparativo: QuadroComparativoDto, nomeArquivo?: string) => {
     const response = await axios.post(`${API_BASE_URL}/orcamentos/exportar-excel`, comparativo, {
       responseType: 'blob',
     });
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
     const nomeFinal = nomeArquivo
       ? (nomeArquivo.endsWith('.xlsx') ? nomeArquivo : `${nomeArquivo}.xlsx`)
       : `quadro_concorrencia_${comparativo.metadados?.numeroQuadro || Date.now()}.xlsx`;
-    link.setAttribute('download', nomeFinal);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    await salvarArquivo(new Blob([response.data]), nomeFinal);
   },
 
   deletarOrcamento: async (id: number) => {
@@ -290,13 +279,7 @@ export const api = {
     const response = await axios.get(`${API_BASE_URL}/faturamento-direto/${id}/excel`, {
       responseType: 'blob',
     });
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `Faturamento_Direto_${numeroControle || id}.xlsx`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    await salvarArquivo(new Blob([response.data]), `Faturamento_Direto_${numeroControle || id}.xlsx`);
   },
   // --- AUTENTICAÇÃO ---
   login: async (req: LoginRequest): Promise<LoginResponse> => {

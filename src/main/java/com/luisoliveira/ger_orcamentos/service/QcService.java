@@ -14,8 +14,10 @@ import com.luisoliveira.ger_orcamentos.model.ItemOrcamento;
 import com.luisoliveira.ger_orcamentos.model.Obra;
 import com.luisoliveira.ger_orcamentos.model.Orcamento;
 import com.luisoliveira.ger_orcamentos.model.Qc;
+import com.luisoliveira.ger_orcamentos.model.FaturamentoDireto;
 import com.luisoliveira.ger_orcamentos.repositories.OrcamentoRepository;
 import com.luisoliveira.ger_orcamentos.repositories.QcRepository;
+import com.luisoliveira.ger_orcamentos.repositories.FaturamentoDiretoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +38,9 @@ public class QcService {
 
     @Autowired
     private AuditoriaService auditoriaService;
+
+    @Autowired
+    private FaturamentoDiretoRepository faturamentoDiretoRepository;
 
     public List<Qc> listarTodos() {
         return qcRepository.findAll();
@@ -129,12 +134,37 @@ public class QcService {
         });
     }
 
+    @Transactional
     public boolean deletar(Long id) {
-        if (qcRepository.existsById(id)) {
-            qcRepository.deleteById(id);
-            return true;
+        if (!qcRepository.existsById(id)) {
+            return false;
         }
-        return false;
+
+        // 1. Desvincula qualquer Faturamento Direto apontando para este QC
+        List<FaturamentoDireto> fds = faturamentoDiretoRepository.findByQcId(id);
+        if (fds != null && !fds.isEmpty()) {
+            for (FaturamentoDireto fd : fds) {
+                fd.setQc(null);
+                faturamentoDiretoRepository.save(fd);
+            }
+        }
+
+        // 2. Se for um QC principal, desvincula ou remove QCs derivados filhos (ex: QC-001-ELECON)
+        Qc qc = qcRepository.findById(id).orElse(null);
+        if (qc != null) {
+            String num = qc.getNumeroQuadro();
+            if (num != null && (!num.contains("-") || num.matches("^QC-\\d+$"))) {
+                List<Qc> todosDaObra = qc.getObra() != null ? qcRepository.findByObraId(qc.getObra().getId()) : List.of();
+                for (Qc outro : todosDaObra) {
+                    if (outro.getId() != null && !outro.getId().equals(id) && outro.getNumeroQuadro() != null && outro.getNumeroQuadro().startsWith(num + "-")) {
+                        qcRepository.deleteById(outro.getId());
+                    }
+                }
+            }
+        }
+
+        qcRepository.deleteById(id);
+        return true;
     }
 
     @Transactional

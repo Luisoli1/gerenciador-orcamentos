@@ -37,7 +37,8 @@ import {
   Loader2,
   Eye,
   ArrowLeft,
-  ReceiptText
+  ReceiptText,
+  Trash2
 } from 'lucide-react';
 
 interface QCViewProps {
@@ -133,6 +134,11 @@ export function QCView({ obraId, initialQcId, initialQcData, onClearInitialQc }:
   const [numeroQcManual, setNumeroQcManual] = useState<string>('');
   const [acaoPendenteGeracao, setAcaoPendenteGeracao] = useState<'visualizar' | 'excel'>('visualizar');
 
+  // Modal de Exclusão de QC
+  const [modalExcluirQcAberto, setModalExcluirQcAberto] = useState<boolean>(false);
+  const [qcParaExcluir, setQcParaExcluir] = useState<{ id: number; numero: string } | null>(null);
+  const [excluindoQc, setExcluindoQc] = useState<boolean>(false);
+
   // Dados do QC ativos: se estiver em edição, usa qcEditavel; caso contrário, qcData
   const activeQc = modoEdicao && qcEditavel ? qcEditavel : qcData;
 
@@ -221,6 +227,39 @@ export function QCView({ obraId, initialQcId, initialQcData, onClearInitialQc }:
     if (e.target.files) {
       setFiles(Array.from(e.target.files));
       setConflitoModal(null);
+    }
+  };
+
+  const handleAbrirModalExcluirQc = (qcId?: number | null, qcNumero?: string) => {
+    if (!qcId) return;
+    const num = qcNumero || activeQc?.metadados?.numeroQuadro || `QC #${qcId}`;
+    setQcParaExcluir({ id: qcId, numero: num });
+    setModalExcluirQcAberto(true);
+  };
+
+  const handleConfirmarExclusaoQc = async () => {
+    if (!qcParaExcluir) return;
+    setExcluindoQc(true);
+    try {
+      await api.deletarQc(qcParaExcluir.id);
+
+      // Se o QC excluído era o que estava aberto na tela, reseta a visualização
+      if (selectedQcId === qcParaExcluir.id || activeQc?.metadados?.id === qcParaExcluir.id) {
+        setSelectedQcId(null);
+        setQcData(null);
+        setQcEditavel(null);
+        setModoEdicao(false);
+      }
+
+      await carregarQcsDaObra();
+      setSucessoQc(`QC ${qcParaExcluir.numero} excluído com sucesso! Numeração atualizada.`);
+      setModalExcluirQcAberto(false);
+      setQcParaExcluir(null);
+    } catch (err: any) {
+      console.error("Erro ao excluir QC:", err);
+      alert("Erro ao excluir QC: " + (err.response?.data?.message || err.message));
+    } finally {
+      setExcluindoQc(false);
     }
   };
 
@@ -1186,6 +1225,17 @@ Equipe de Suprimentos - Makinsthal`;
             >
               <RefreshCw className={`w-4 h-4 ${carregandoQc ? 'animate-spin' : ''}`} />
             </button>
+
+            {selectedQcId && (
+              <button
+                onClick={() => handleAbrirModalExcluirQc(selectedQcId, activeQc?.metadados?.numeroQuadro)}
+                disabled={modoEdicao}
+                className="p-2 bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-xl transition cursor-pointer disabled:opacity-50"
+                title={`Excluir este QC (${activeQc?.metadados?.numeroQuadro || 'QC'})`}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -1355,16 +1405,27 @@ Equipe de Suprimentos - Makinsthal`;
                       <span>{activeQc.metadados?.dataElaboracao || 'Data N/D'}</span>
                     )}
 
-                    {/* BOTÃO ATUALIZAR QC (DEIXA CAMPOS EDITÁVEIS) */}
+                    {/* BOTÕES DE AÇÃO: ATUALIZAR E EXCLUIR QC */}
                     {!modoEdicao ? (
-                      <button
-                        onClick={handleIniciarEdicaoQc}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-semibold transition cursor-pointer shadow-md shadow-blue-600/20 active:scale-95 ml-2"
-                        title="Tornar todos os campos e preços do orçamento editáveis na tela"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                        <span>Atualizar QC</span>
-                      </button>
+                      <div className="inline-flex items-center gap-2 ml-2">
+                        <button
+                          onClick={handleIniciarEdicaoQc}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-semibold transition cursor-pointer shadow-md shadow-blue-600/20 active:scale-95"
+                          title="Tornar todos os campos e preços do orçamento editáveis na tela"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          <span>Atualizar QC</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleAbrirModalExcluirQc(activeQc.metadados?.id || selectedQcId, activeQc.metadados?.numeroQuadro)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-semibold transition cursor-pointer shadow-sm active:scale-95"
+                          title="Excluir este Quadro Comparativo do banco de dados"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Excluir QC</span>
+                        </button>
+                      </div>
                     ) : (
                       <div className="inline-flex items-center gap-2 ml-2">
                         <button
@@ -1836,6 +1897,15 @@ Equipe de Suprimentos - Makinsthal`;
                           >
                             <Download className="w-3.5 h-3.5" />
                             <span>Baixar Excel</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleAbrirModalExcluirQc(qcVenc.id, qcVenc.numeroQuadro)}
+                            className="p-2 bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-xl transition cursor-pointer"
+                            title={`Excluir este QC vencedor (${qcVenc.numeroQuadro})`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
@@ -2544,6 +2614,65 @@ Equipe de Suprimentos - Makinsthal`;
               </button>
             </div>
 
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 8. MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE QC */}
+      {modalExcluirQcAberto && qcParaExcluir && createPortal(
+        <div className="fixed inset-0 top-0 left-0 w-screen h-screen z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 animate-scaleUp">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="p-2.5 bg-rose-500/10 rounded-xl border border-rose-500/20">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-100 text-base">Excluir Quadro Comparativo</h3>
+                <p className="text-xs text-slate-400">Ação irreversível</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Tem certeza que deseja excluir o <strong className="text-white font-mono">{qcParaExcluir.numero}</strong> desta obra?
+            </p>
+
+            <div className="p-3 bg-blue-950/40 border border-blue-800/40 rounded-xl text-[11px] text-blue-300 space-y-1">
+              <p className="font-semibold text-blue-200">Atualização de Sequência:</p>
+              <p>Ao excluir este QC, a numeração sequencial da obra será recalculada automaticamente para que a próxima cotação continue na sequência correta.</p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setModalExcluirQcAberto(false);
+                  setQcParaExcluir(null);
+                }}
+                disabled={excluindoQc}
+                className="px-4 py-2 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 text-xs font-semibold cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={excluindoQc}
+                onClick={handleConfirmarExclusaoQc}
+                className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-rose-600/25 disabled:opacity-50 cursor-pointer"
+              >
+                {excluindoQc ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Excluindo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirmar Exclusão</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>,
         document.body

@@ -144,7 +144,7 @@ public class QcService {
         String num = qc.getNumeroQuadro();
         // Se for um QC principal (ex: QC-001), exclui primeiro todos os QCs filhos/derivados (ex: QC-001-ELECON)
         if (num != null && (!num.contains("-") || num.matches("^QC-\\d+$"))) {
-            List<Qc> todosDaObra = qc.getObra() != null ? qcRepository.findByObraId(qc.getObra().getId()) : List.of();
+            List<Qc> todosDaObra = qc.getObra() != null ? qcRepository.findAllByObraId(qc.getObra().getId()) : List.of();
             for (Qc outro : todosDaObra) {
                 if (outro.getId() != null && !outro.getId().equals(id) && outro.getNumeroQuadro() != null && outro.getNumeroQuadro().startsWith(num + "-")) {
                     excluirQcEAssociacoes(outro.getId());

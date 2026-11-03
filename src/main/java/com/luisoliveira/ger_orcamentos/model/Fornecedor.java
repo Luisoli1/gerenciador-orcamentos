@@ -1,7 +1,7 @@
 package com.luisoliveira.ger_orcamentos.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,13 +17,19 @@ public class Fornecedor implements Serializable {
     private Long id;
 
     private String nome;
+
+    @Column(name = "cnpj", unique = true)
     private String cnpj;
+
     private String nomeContato;
     private String emailContato;
     private String telefoneContato;
     private String celularContato;
     private String localCidade;
+    private String endereco;
+    private String cep;
 
+    @JsonIgnore
     @OneToMany(mappedBy = "fornecedor", cascade = CascadeType.ALL)
     private List<Orcamento> orcamentos = new ArrayList<>();
 
@@ -42,6 +48,10 @@ public class Fornecedor implements Serializable {
 
     public Long getId() {
         return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public String getNome() {
@@ -104,15 +114,36 @@ public class Fornecedor implements Serializable {
         return orcamentos;
     }
 
+    public void setOrcamentos(List<Orcamento> orcamentos) {
+        this.orcamentos = orcamentos;
+    }
+
     @Override
     public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
-        Fornecedor that = (Fornecedor) o;
-        return Objects.equals(id, that.id);
+        if (this == o) return true;
+        if (!(o instanceof Fornecedor that)) return false;
+        return Objects.equals(id, that.id) && Objects.equals(cnpj, that.cnpj);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(id);
+        return Objects.hash(id, cnpj);
     }
+
+    public String getEndereco() {
+        return endereco;
+    }
+
+    public void setEndereco(String endereco) {
+        this.endereco = endereco;
+    }
+
+    public String getCep() {
+        return cep;
+    }
+
+    public void setCep(String cep) {
+        this.cep = cep;
+    }
+
 }

@@ -1,8 +1,12 @@
 package com.luisoliveira.ger_orcamentos.controller;
 
+import com.luisoliveira.ger_orcamentos.dto.ConflitoQcDto;
 import com.luisoliveira.ger_orcamentos.dto.ItemVariacaoDto;
 import com.luisoliveira.ger_orcamentos.dto.QuadroComparativoDto;
 import com.luisoliveira.ger_orcamentos.dto.QuadroConcorrenciaDto;
+import com.luisoliveira.ger_orcamentos.model.Orcamento;
+import com.luisoliveira.ger_orcamentos.repositories.OrcamentoRepository;
+import com.luisoliveira.ger_orcamentos.service.AnalisePrecoService;
 import com.luisoliveira.ger_orcamentos.service.ExcelExportService;
 import com.luisoliveira.ger_orcamentos.service.OrcamentoService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,30 +30,38 @@ public class OrcamentoController {
     @Autowired
     private ExcelExportService excelExportService;
 
+    @Autowired
+    private OrcamentoRepository orcamentoRepository;
+
+    @Autowired
+    private AnalisePrecoService analisePrecoService;
+
+    // --- ROTAS DE PROCESSAMENTO E IA ---
+
     @PostMapping("/upload")
     public ResponseEntity<?> uploadOrcamento(
-            @RequestParam("obraId") Long obraId, // Tornamos obrigatório para associar ao QC
-            @RequestParam("files") List<MultipartFile> files) {
+            @RequestParam("obraId") Long obraId,
+            @RequestParam("files") List<MultipartFile> files,
+            @RequestParam(value = "forceNew", defaultValue = "false") boolean forceNew,
+            @RequestParam(value = "numeroQc", required = false) String numeroQc) {
 
-        if (files.size() == 1) {
-            QuadroConcorrenciaDto resultado = orcamentoService.processarUploadOrcamento(files.get(0));
-            return ResponseEntity.ok(resultado);
-        } else {
-            // Chamamos o método correto que processa com base na obra e gera o QC sequencial
-            QuadroComparativoDto comparativoDto = orcamentoService.processarMultiplosComObra(obraId, files);
-            return ResponseEntity.ok(comparativoDto);
-        }
+        Object resultado = orcamentoService.processarMultiplosComObra(obraId, files, forceNew, numeroQc);
+        return ResponseEntity.ok(resultado);
     }
 
     @PostMapping("/comparativo-excel")
-    public ResponseEntity<InputStreamResource> gerarComparativoExcel(
+    public ResponseEntity<?> gerarComparativoExcel(
             @RequestParam("obraId") Long obraId,
-            @RequestParam("files") List<MultipartFile> files) {
+            @RequestParam("files") List<MultipartFile> files,
+            @RequestParam(value = "forceNew", defaultValue = "false") boolean forceNew,
+            @RequestParam(value = "numeroQc", required = false) String numeroQc) {
 
-        // 1. Processa os arquivos vinculando à Obra e incrementando o QC
-        QuadroComparativoDto comparativoDto = orcamentoService.processarMultiplosComObra(obraId, files);
+        Object resultado = orcamentoService.processarMultiplosComObra(obraId, files, forceNew, numeroQc);
+        if (resultado instanceof ConflitoQcDto conflito) {
+            return ResponseEntity.ok(conflito);
+        }
 
-        // 2. Gera o fluxo de bytes da planilha Excel
+        QuadroComparativoDto comparativoDto = (QuadroComparativoDto) resultado;
         ByteArrayInputStream in = excelExportService.gerarQuadroComparativoExcel(comparativoDto);
 
         HttpHeaders headers = new HttpHeaders();
@@ -77,13 +89,36 @@ public class OrcamentoController {
     }
 
     @PostMapping("/analisar")
-    public ResponseEntity<List<ItemVariacaoDto>> analisarOrcamento(@RequestParam("file") MultipartFile file) {
-        try {
-            List<ItemVariacaoDto> resultado = orcamentoService.analisarVariacoesPreco(file);
-            return ResponseEntity.ok(resultado);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.internalServerError().build();
+    public ResponseEntity<List<ItemVariacaoDto>> analisarVariacoesPreco(@RequestParam("file") MultipartFile file) {
+        List<ItemVariacaoDto> variacoes = analisePrecoService.analisarVariacoesPreco(file);
+        return ResponseEntity.ok(variacoes);
+    }
+
+    // --- CRUD ORÇAMENTOS ---
+
+    @GetMapping
+    public ResponseEntity<List<Orcamento>> listarOrcamentos() {
+        return ResponseEntity.ok(orcamentoRepository.findAll());
+    }
+
+    @GetMapping("/obra/{obraId}")
+    public ResponseEntity<List<Orcamento>> listarPorObra(@PathVariable Long obraId) {
+        return ResponseEntity.ok(orcamentoRepository.findByQcObraId(obraId));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Orcamento> buscarPorId(@PathVariable Long id) {
+        return orcamentoRepository.findById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deletarOrcamento(@PathVariable Long id) {
+        if (orcamentoRepository.existsById(id)) {
+            orcamentoRepository.deleteById(id);
+            return ResponseEntity.noContent().build();
         }
+        return ResponseEntity.notFound().build();
     }
 }

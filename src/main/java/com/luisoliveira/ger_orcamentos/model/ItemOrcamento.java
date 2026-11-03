@@ -1,5 +1,6 @@
 package com.luisoliveira.ger_orcamentos.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 import java.io.Serializable;
@@ -22,8 +23,9 @@ public class ItemOrcamento implements Serializable {
     private BigDecimal valorTotal;
     private BigDecimal aliquotaIpi;
 
-    @ManyToOne(cascade = CascadeType.ALL)
-    @JoinColumn(name = "orcamento_id")
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "orcamento_id", nullable = false)
     private Orcamento orcamento;
 
     public Orcamento getOrcamento() {

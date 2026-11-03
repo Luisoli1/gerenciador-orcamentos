@@ -25,6 +25,12 @@ public class Orcamento implements Serializable {
     private BigDecimal valorTotalMercadoria;
     private BigDecimal valorTotalIpi;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "qc_id")
+    private Qc qc;
+
+    @OneToMany(mappedBy = "orcamento", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ItemOrcamento> itens = new ArrayList<>();
 
     @ManyToOne
     @JoinColumn(name = "fornecedor_id")
@@ -37,9 +43,6 @@ public class Orcamento implements Serializable {
     public void setFornecedor(Fornecedor fornecedor) {
         this.fornecedor = fornecedor;
     }
-
-    @OneToMany(mappedBy = "orcamento", cascade = CascadeType.ALL)
-    private List<ItemOrcamento> itens = new ArrayList<>();
 
 
     public Orcamento() {
@@ -115,6 +118,14 @@ public class Orcamento implements Serializable {
 
     public void setItens(List<ItemOrcamento> itens) {
         this.itens = itens;
+    }
+
+    public Qc getQc() {
+        return qc;
+    }
+
+    public void setQc(Qc qc) {
+        this.qc = qc;
     }
 
     @Override

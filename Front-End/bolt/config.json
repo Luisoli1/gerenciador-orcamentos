@@ -1,0 +1,5 @@
+{
+  "appName": "Makinsthal Orçamentos",
+  "version": "1.0.0",
+  "apiBaseUrl": "http://localhost:8080/api"
+}

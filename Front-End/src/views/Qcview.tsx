@@ -668,31 +668,31 @@ export function QCView({ obraId, initialQcId, initialQcData, onClearInitialQc }:
     }).join('\n\n');
 
     const saudacao = orc.nomeContato && orc.nomeContato.trim().length > 0
-      ? `Prezado(a) ${orc.nomeContato.trim()},`
-      : `Prezado(a) vendedor(a) da ${orc.nomeFornecedor},`;
+      ? `Olá ${orc.nomeContato.trim()}, tudo bem?`
+      : `Olá pessoal da ${orc.nomeFornecedor}, tudo bem?`;
 
-    const assunto = `Solicitação de Ajuste de Preço - Concorrência ${qcNum} (${obraNome})`;
+    const assunto = `Ajuste de Preço - Concorrência ${qcNum} (${obraNome})`;
 
     const texto = `${saudacao}
 
-Estamos finalizando o Quadro Comparativo de Preços (${qcNum}) da obra "${obraNome}" e temos grande interesse em fechar o fornecimento completo com a ${orc.nomeFornecedor}.
+Estamos fechando o Quadro Comparativo (${qcNum}) da obra "${obraNome}" e temos total interesse em fechar o fornecimento completo com vocês (${orc.nomeFornecedor}).
 
-Para viabilizarmos o fechamento integral da cotação com vocês, identificamos que alguns itens ficaram acima dos concorrentes. Gostaríamos de solicitar o alinhamento dos preços para os valores-alvo abaixo:
+Identificamos que alguns itens ficaram acima dos concorrentes. Conseguem igualar os valores-alvo abaixo para fecharmos tudo com vocês?
 
 ITENS A AJUSTAR:
 ${listaItensTexto}
 
-RESUMO DA NEGOCIAÇÃO:
+RESUMO:
 • Total de itens para ajuste: ${itens.length} item(ns)
 • Diferença total a equiparar: ${fmt(totalDiferenca)}
 
-Com a equiparação desses itens ao valor do concorrente, conseguimos formalizar o fechamento e emitir a Ordem de Compra para vocês.
+Com a equiparação desses itens ao valor do concorrente, a gente já formaliza o fechamento integral e emite a Ordem de Compra para vocês.
 
 Consegue verificar essa condição especial com a sua gerência comercial?
 
 Fico no aguardo do seu breve retorno para fecharmos o pedido!
 
-Atenciosamente,
+Abraço,
 Equipe de Suprimentos - Makinsthal`;
 
     setNegociacaoModal({
@@ -2202,7 +2202,8 @@ Equipe de Suprimentos - Makinsthal`;
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 6. MODAL DE SOLICITAÇÃO DE EXCLUSÃO DE ITENS PERDEDORES (FECHAR VENCEDORES) */}

@@ -2,6 +2,7 @@ package com.luisoliveira.ger_orcamentos.service;
 
 import com.luisoliveira.ger_orcamentos.dto.ItemQuadroDTO;
 import com.luisoliveira.ger_orcamentos.dto.GerarQcVencedorRequestDto;
+import com.luisoliveira.ger_orcamentos.dto.RestaurarItemDto;
 import java.time.LocalDate;
 import com.luisoliveira.ger_orcamentos.dto.DiffItemDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -464,6 +465,140 @@ public class QcService {
     private String formatMoney(BigDecimal val) {
         if (val == null) return "0,00";
         return String.format(java.util.Locale.forLanguageTag("pt-BR"), "%,.2f", val);
+    }
+
+    @Transactional
+    public boolean restaurarItem(Long qcId, RestaurarItemDto dto) {
+        Qc qc = qcRepository.findById(qcId).orElse(null);
+        if (qc == null) return false;
+
+        List<Orcamento> orcamentos = orcamentoRepository.findByQcId(qcId);
+        if (orcamentos == null || orcamentos.isEmpty()) return false;
+
+        String itemBuscado = dto.item() != null ? dto.item().trim() : "";
+        String campo = dto.campo() != null ? dto.campo().trim() : "";
+        String fornecedorBuscado = dto.fornecedor() != null ? dto.fornecedor().trim() : null;
+        String valorAntigo = dto.valorAntigo() != null ? dto.valorAntigo().trim() : "";
+        String valorAtual = dto.valorAtual() != null ? dto.valorAtual().trim() : "";
+
+        boolean alterou = false;
+
+        for (Orcamento orc : orcamentos) {
+            if (fornecedorBuscado != null && !fornecedorBuscado.isEmpty() && orc.getFornecedor() != null) {
+                String nomeForn = orc.getFornecedor().getNome();
+                if (nomeForn != null && !nomeForn.equalsIgnoreCase(fornecedorBuscado)) {
+                    // Para preço unitário, marca ou IPI, altera apenas no fornecedor especificado
+                    if (!campo.equalsIgnoreCase("Quantidade") && !campo.toLowerCase().contains("descri")) {
+                        continue;
+                    }
+                }
+            }
+
+            for (ItemOrcamento item : orc.getItens()) {
+                if (item.getDescricao() != null && item.getDescricao().trim().equalsIgnoreCase(itemBuscado)) {
+                    if (campo.equalsIgnoreCase("Quantidade")) {
+                        BigDecimal novaQtd = extrairNumero(valorAntigo);
+                        if (novaQtd != null) {
+                            item.setQuantidade(novaQtd);
+                            if (item.getValorUnitario() != null) {
+                                item.setValorTotal(novaQtd.multiply(item.getValorUnitario()));
+                            }
+                            alterou = true;
+                        }
+                    } else if (campo.toLowerCase().contains("preço") || campo.toLowerCase().contains("preco") || campo.toLowerCase().contains("unitário") || campo.toLowerCase().contains("unitario")) {
+                        BigDecimal novoPreco = extrairNumero(valorAntigo);
+                        if (novoPreco != null) {
+                            item.setValorUnitario(novoPreco);
+                            if (item.getQuantidade() != null) {
+                                item.setValorTotal(item.getQuantidade().multiply(novoPreco));
+                            }
+                            alterou = true;
+                        }
+                    } else if (campo.toLowerCase().contains("marca")) {
+                        item.setMarca(valorAntigo);
+                        alterou = true;
+                    } else if (campo.toLowerCase().contains("unidade")) {
+                        item.setUnidadeDeMedida(valorAntigo);
+                        alterou = true;
+                    } else if (campo.toLowerCase().contains("descri")) {
+                        item.setDescricao(valorAntigo);
+                        alterou = true;
+                    } else if (campo.toLowerCase().contains("ipi")) {
+                        BigDecimal novoIpi = extrairNumero(valorAntigo);
+                        if (novoIpi != null) {
+                            item.setAliquotaIpi(novoIpi);
+                            alterou = true;
+                        }
+                    }
+                }
+            }
+
+            if (alterou) {
+                BigDecimal totalMercadoria = BigDecimal.ZERO;
+                BigDecimal totalIpi = BigDecimal.ZERO;
+                for (ItemOrcamento it : orc.getItens()) {
+                    if (it.getValorTotal() != null) {
+                        totalMercadoria = totalMercadoria.add(it.getValorTotal());
+                        if (it.getAliquotaIpi() != null && it.getAliquotaIpi().compareTo(BigDecimal.ZERO) > 0) {
+                            BigDecimal ipiItem = it.getValorTotal().multiply(it.getAliquotaIpi()).divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                            totalIpi = totalIpi.add(ipiItem);
+                        }
+                    }
+                }
+                orc.setValorTotalMercadoria(totalMercadoria);
+                orc.setValorTotalIpi(totalIpi);
+                orc.setValorTotal(totalMercadoria.add(totalIpi));
+                orcamentoRepository.save(orc);
+            }
+        }
+
+        if (alterou) {
+            orcamentoRepository.flush();
+            String numQc = qc.getNumeroQuadro() != null ? qc.getNumeroQuadro() : ("#" + qcId);
+            String fornInfo = (fornecedorBuscado != null && !fornecedorBuscado.isEmpty()) ? (" (" + fornecedorBuscado + ")") : "";
+            String detalhes = "QC " + numQc + ": Reverteu " + itemBuscado + fornInfo + " [" + campo + "] de '" + valorAtual + "' para '" + valorAntigo + "'";
+
+            List<DiffItemDto> restorationDiff = List.of(new DiffItemDto(
+                    itemBuscado,
+                    fornecedorBuscado,
+                    campo,
+                    valorAtual,
+                    valorAntigo
+            ));
+            String diffJson = null;
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                diffJson = mapper.writeValueAsString(restorationDiff);
+            } catch (Exception e) {
+                System.err.println("Erro ao serializar diff de restauração: " + e.getMessage());
+            }
+
+            auditoriaService.registrar("RESTAURACAO", "QC", qcId.toString(), detalhes, diffJson);
+            return true;
+        }
+
+        return false;
+    }
+
+    private BigDecimal extrairNumero(String texto) {
+        if (texto == null || texto.isBlank()) return null;
+        String limpo = texto.replaceAll("[^0-9,\\.]", "").trim();
+        if (limpo.isEmpty()) return null;
+
+        try {
+            if (limpo.contains(",") && limpo.contains(".")) {
+                if (limpo.lastIndexOf(",") > limpo.lastIndexOf(".")) {
+                    limpo = limpo.replace(".", "").replace(",", ".");
+                } else {
+                    limpo = limpo.replace(",", "");
+                }
+            } else if (limpo.contains(",")) {
+                limpo = limpo.replace(",", ".");
+            }
+            return new BigDecimal(limpo);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
 }

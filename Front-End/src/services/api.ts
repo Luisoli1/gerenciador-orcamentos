@@ -238,6 +238,17 @@ export const api = {
     return response.data;
   },
 
+  restaurarItemQc: async (qcId: number, dto: {
+    item: string;
+    fornecedor?: string;
+    campo: string;
+    valorAntigo: string;
+    valorAtual: string;
+  }): Promise<{ sucesso: boolean; mensagem: string }> => {
+    const response = await axios.post(`${API_BASE_URL}/qc/${qcId}/restaurar-item`, dto);
+    return response.data;
+  },
+
 
   // --- FATURAMENTO DIRETO ---
   listarFaturamentosDiretos: async (obraId?: number): Promise<FaturamentoDireto[]> => {

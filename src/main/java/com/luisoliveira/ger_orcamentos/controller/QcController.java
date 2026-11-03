@@ -2,6 +2,7 @@ package com.luisoliveira.ger_orcamentos.controller;
 
 import com.luisoliveira.ger_orcamentos.dto.QuadroComparativoDto;
 import com.luisoliveira.ger_orcamentos.dto.GerarQcVencedorRequestDto;
+import com.luisoliveira.ger_orcamentos.dto.RestaurarItemDto;
 import com.luisoliveira.ger_orcamentos.model.Qc;
 import com.luisoliveira.ger_orcamentos.service.QcService;
 import com.luisoliveira.ger_orcamentos.service.AuditoriaService;
@@ -11,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/qc")
@@ -95,6 +97,22 @@ public class QcController {
     public ResponseEntity<Qc> gerarQcVencedor(@RequestBody GerarQcVencedorRequestDto dto) {
         Qc criado = qcService.gerarQcVencedor(dto);
         return ResponseEntity.status(HttpStatus.CREATED).body(criado);
+    }
+
+    @PostMapping("/{id}/restaurar-item")
+    public ResponseEntity<?> restaurarItem(
+            @PathVariable Long id,
+            @RequestBody RestaurarItemDto dto) {
+        try {
+            boolean restaurado = qcService.restaurarItem(id, dto);
+            if (restaurado) {
+                return ResponseEntity.ok(Map.of("sucesso", true, "mensagem", "Item restaurado com sucesso"));
+            } else {
+                return ResponseEntity.badRequest().body(Map.of("sucesso", false, "mensagem", "Não foi possível localizar o item para restauração"));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("sucesso", false, "mensagem", "Erro ao restaurar item: " + e.getMessage()));
+        }
     }
 
 }

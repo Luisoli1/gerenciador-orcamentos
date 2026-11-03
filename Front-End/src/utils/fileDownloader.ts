@@ -82,3 +82,4 @@ export async function salvarArquivo(
   window.URL.revokeObjectURL(url);
   return true;
 }
+

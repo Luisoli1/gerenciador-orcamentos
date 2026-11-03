@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { AuditoriaLog, DiffItem } from '../types';
 import api from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   History, 
   ShieldAlert, 
@@ -17,10 +18,12 @@ import {
   GitCompare,
   Columns,
   ListFilter,
-  CheckCircle2
+  CheckCircle2,
+  RotateCcw
 } from 'lucide-react';
 
 export const AuditoriaView: React.FC = () => {
+  const { isDono } = useAuth();
   const [logs, setLogs] = useState<AuditoriaLog[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [filtroEntidade, setFiltroEntidade] = useState<string>('TODOS');
@@ -29,6 +32,13 @@ export const AuditoriaView: React.FC = () => {
   // Estado para o Modal de Diff Estilo GitHub
   const [logSelecionadoParaDiff, setLogSelecionadoParaDiff] = useState<AuditoriaLog | null>(null);
   const [modoVisualizacaoDiff, setModoVisualizacaoDiff] = useState<'split' | 'unified'>('split');
+
+  // Estado para Confirmação de Restauração de Valor Rastreável
+  const [itemParaRestaurar, setItemParaRestaurar] = useState<{
+    log: AuditoriaLog;
+    diff: DiffItem;
+  } | null>(null);
+  const [restaurando, setRestaurando] = useState(false);
 
   const carregarLogs = async (termo?: string) => {
     try {
@@ -67,6 +77,37 @@ export const AuditoriaView: React.FC = () => {
   const aplicarFiltroRapido = (termo: string) => {
     setBusca(termo);
     carregarLogs(termo);
+  };
+
+  const handleConfirmarRestauracao = async () => {
+    if (!itemParaRestaurar) return;
+    const { log, diff } = itemParaRestaurar;
+    const qcId = Number(log.idRegistro);
+    if (!qcId) {
+      alert("ID do QC inválido para restauração.");
+      return;
+    }
+
+    setRestaurando(true);
+    try {
+      const res = await api.restaurarItemQc(qcId, {
+        item: diff.item,
+        fornecedor: diff.fornecedor,
+        campo: diff.campo,
+        valorAntigo: diff.antes,
+        valorAtual: diff.depois,
+      });
+
+      setItemParaRestaurar(null);
+      setLogSelecionadoParaDiff(null);
+      await carregarLogs(busca);
+      alert(res.mensagem || "Valor restaurado com sucesso! Novo evento gravado na auditoria com rastreabilidade total.");
+    } catch (err: any) {
+      console.error("Erro ao restaurar:", err);
+      alert("Erro ao restaurar valor: " + (err.response?.data?.mensagem || err.message));
+    } finally {
+      setRestaurando(false);
+    }
   };
 
   // Helper para destacar a palavra buscada no texto
@@ -144,6 +185,8 @@ export const AuditoriaView: React.FC = () => {
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">CRIAÇÃO</span>;
       case 'ATUALIZACAO':
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">ATUALIZAÇÃO</span>;
+      case 'RESTAURACAO':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">RESTAURAÇÃO</span>;
       case 'EXCLUSAO':
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">EXCLUSÃO</span>;
       case 'LOGIN':
@@ -259,6 +302,12 @@ export const AuditoriaView: React.FC = () => {
               className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-blue-300 rounded font-mono text-[10px]"
             >
               Alterações
+            </button>
+            <button
+              onClick={() => aplicarFiltroRapido('RESTAURACAO')}
+              className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded font-mono text-[10px]"
+            >
+              Restaurações
             </button>
             <button
               onClick={() => aplicarFiltroRapido('EXCLUSAO')}
@@ -453,16 +502,33 @@ export const AuditoriaView: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-800 font-mono text-xs">
                       {/* LADO ANTES (VERMELHO) */}
                       <div className="p-3.5 bg-rose-950/20 border-l-4 border-rose-500 flex flex-col justify-between">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                            Como estava Antes (Valor Antigo)
-                          </span>
-                          <span className="text-rose-500 font-bold">-</span>
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                              Como estava Antes (Valor Antigo)
+                            </span>
+                            <span className="text-rose-500 font-bold">-</span>
+                          </div>
+                          <div className="text-rose-200 bg-rose-950/40 p-2.5 rounded-lg border border-rose-900/50 break-words font-semibold">
+                            {diff.antes || '(vazio)'}
+                          </div>
                         </div>
-                        <div className="text-rose-200 bg-rose-950/40 p-2.5 rounded-lg border border-rose-900/50 break-words font-semibold">
-                          {diff.antes || '(vazio)'}
-                        </div>
+
+                        {/* Botão de Restauração para o Perfil Dono */}
+                        {isDono && logSelecionadoParaDiff?.entidade === 'QC' && logSelecionadoParaDiff?.idRegistro && diff.antes && diff.antes !== '(vazio)' && (
+                          <div className="mt-3 pt-2.5 border-t border-rose-900/40">
+                            <button
+                              type="button"
+                              onClick={() => setItemParaRestaurar({ log: logSelecionadoParaDiff, diff })}
+                              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 active:scale-98 text-amber-300 hover:text-amber-200 border border-amber-500/30 hover:border-amber-500/50 rounded-lg text-[11px] font-bold tracking-wide transition-all shadow-sm cursor-pointer"
+                              title="Reverter este item para o valor anterior com registro rastreável na auditoria"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Restaurar este valor</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {/* LADO DEPOIS (VERDE) */}
@@ -488,6 +554,17 @@ export const AuditoriaView: React.FC = () => {
                           <span className="text-rose-400 font-semibold mr-1">Antes:</span>
                           {diff.antes || '(vazio)'}
                         </span>
+                        {isDono && logSelecionadoParaDiff?.entidade === 'QC' && logSelecionadoParaDiff?.idRegistro && diff.antes && diff.antes !== '(vazio)' && (
+                          <button
+                            type="button"
+                            onClick={() => setItemParaRestaurar({ log: logSelecionadoParaDiff, diff })}
+                            className="ml-3 shrink-0 flex items-center gap-1 px-2.5 py-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-md text-[10px] font-bold transition cursor-pointer"
+                            title="Reverter este item para o valor anterior"
+                          >
+                            <RotateCcw className="w-3 h-3 text-amber-400" />
+                            <span>Restaurar</span>
+                          </button>
+                        )}
                       </div>
                       <div className="px-3 py-2 bg-emerald-950/30 border-l-4 border-emerald-500 text-emerald-300 rounded flex items-center justify-between">
                         <span className="break-words">
@@ -512,6 +589,84 @@ export const AuditoriaView: React.FC = () => {
                 className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl transition cursor-pointer"
               >
                 Fechar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal de Confirmação de Restauração Rastreável */}
+      {itemParaRestaurar && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                <RotateCcw className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Restaurar Versão Anterior</h3>
+                <p className="text-xs text-slate-400">Ação de gestão com rastreabilidade total</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2 text-xs">
+              <div className="flex justify-between border-b border-slate-800 pb-1.5">
+                <span className="text-slate-400">Material / Item:</span>
+                <span className="font-semibold text-white text-right max-w-[200px] truncate" title={itemParaRestaurar.diff.item}>
+                  {itemParaRestaurar.diff.item}
+                </span>
+              </div>
+              {itemParaRestaurar.diff.fornecedor && (
+                <div className="flex justify-between border-b border-slate-800 pb-1.5">
+                  <span className="text-slate-400">Fornecedor:</span>
+                  <span className="font-semibold text-amber-400">{itemParaRestaurar.diff.fornecedor}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-b border-slate-800 pb-1.5">
+                <span className="text-slate-400">Campo:</span>
+                <span className="font-semibold text-indigo-300">{itemParaRestaurar.diff.campo}</span>
+              </div>
+              <div className="flex justify-between items-center pt-1 font-mono">
+                <span className="text-rose-400 text-[11px]">Valor Atual: <strong className="text-rose-300">{itemParaRestaurar.diff.depois}</strong></span>
+                <span className="text-slate-500">➔</span>
+                <span className="text-emerald-400 text-[11px]">Restaurar para: <strong className="text-emerald-300">{itemParaRestaurar.diff.antes}</strong></span>
+              </div>
+            </div>
+
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-[11px] text-amber-300/90 leading-relaxed flex items-start gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <span>
+                <strong>Regra de Auditoria:</strong> O histórico anterior não será apagado. Uma nova entrada <strong>[AÇÃO: RESTAURAÇÃO]</strong> será gerada no log com seu usuário e carimbo de data/hora.
+              </span>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setItemParaRestaurar(null)}
+                disabled={restaurando}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarRestauracao}
+                disabled={restaurando}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-amber-500/20 transition cursor-pointer"
+              >
+                {restaurando ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Restaurando...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Confirmar Restauração</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

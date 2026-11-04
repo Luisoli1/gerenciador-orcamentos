@@ -29,12 +29,6 @@ export const LoginView: React.FC = () => {
     }
   };
 
-  const preencherCredenciaisPadrao = () => {
-    setEmail('admin@makinsthal.com.br');
-    setSenha('admin123');
-    setErro(null);
-  };
-
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-4 relative overflow-hidden">
       {/* Luzes de fundo decorativas */}
@@ -128,18 +122,11 @@ export const LoginView: React.FC = () => {
           </button>
         </form>
 
-        {/* Dica do Dono Inicial */}
+        {/* Rodapé institucional */}
         <div className="mt-8 pt-5 border-t border-slate-800/80 text-center">
-          <p className="text-[11px] text-slate-400 mb-2">
-            Primeiro acesso como Dono da aplicação?
+          <p className="text-[11px] text-slate-500 font-medium">
+            Makinsthal Engenharia & Instalações © {new Date().getFullYear()} • Todos os direitos reservados
           </p>
-          <button
-            type="button"
-            onClick={preencherCredenciaisPadrao}
-            className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold underline decoration-dashed transition-colors"
-          >
-            Usar credenciais iniciais do Dono (admin@makinsthal.com.br)
-          </button>
         </div>
       </div>
     </div>

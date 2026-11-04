@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../services/api';
-import type { QuadroComparativoDto, Qc, QuadroConcorrenciaDto, ConflitoQcDto, ItemQuadroDTO } from '../types';
+import type { QuadroComparativoDto, Qc, QuadroConcorrenciaDto, ConflitoQcDto, ItemQuadroDTO, VerificacaoConciliacaoResponse, ItemCanonico } from '../types';
+import { ModalConciliacaoQc } from '../components/ModalConciliacaoQc';
 import { consolidateQuadro, areItemsEquivalent } from '../utils/qcMatcher';
 import { 
   Upload, 
@@ -138,6 +139,11 @@ export function QCView({ obraId, initialQcId, initialQcData, onClearInitialQc }:
   const [modalExcluirQcAberto, setModalExcluirQcAberto] = useState<boolean>(false);
   const [qcParaExcluir, setQcParaExcluir] = useState<{ id: number; numero: string } | null>(null);
   const [excluindoQc, setExcluindoQc] = useState<boolean>(false);
+
+  // Modal de Conciliação Inteligente de Itens (Aprendizado Progressivo)
+  const [modalConciliacaoAberto, setModalConciliacaoAberto] = useState<boolean>(false);
+  const [verificacaoConciliacao, setVerificacaoConciliacao] = useState<VerificacaoConciliacaoResponse | null>(null);
+  const [materiaisMestre, setMateriaisMestre] = useState<ItemCanonico[]>([]);
 
   // Dados do QC ativos: se estiver em edição, usa qcEditavel; caso contrário, qcData
   const activeQc = modoEdicao && qcEditavel ? qcEditavel : qcData;
@@ -302,6 +308,19 @@ export function QCView({ obraId, initialQcId, initialQcData, onClearInitialQc }:
       setConflitoModal(null);
       await carregarQcsDaObra();
 
+      // Verificação automática de conciliação / discrepâncias (ex: 30 + 30 = 33)
+      try {
+        const verif = await api.verificarDiscrepancias(resultado);
+        if (verif && (verif.possuiDiscrepancia || (verif.discrepancias && verif.discrepancias.length > 0))) {
+          const mats = await api.listarMateriaisMestre();
+          setVerificacaoConciliacao(verif);
+          setMateriaisMestre(mats);
+          setModalConciliacaoAberto(true);
+        }
+      } catch (vErr) {
+        console.warn("Verificação de conciliação silenciosa:", vErr);
+      }
+
       // Identifica e vincula o ID do QC recém gerado
       const numGerado = resultado?.metadados?.numeroQuadro || numeroQcParam;
       if (numGerado) {
@@ -366,6 +385,43 @@ export function QCView({ obraId, initialQcId, initialQcData, onClearInitialQc }:
     setFiles([]);
     setConflitoModal(null);
     if (onClearInitialQc) onClearInitialQc();
+  };
+
+  // Abrir Modal de Conciliação Manualmente
+  const handleAbrirConciliacaoManual = async () => {
+    if (!activeQc) return;
+    setLoading(true);
+    try {
+      const [verif, mats] = await Promise.all([
+        api.verificarDiscrepancias(activeQc),
+        api.listarMateriaisMestre()
+      ]);
+      setVerificacaoConciliacao(verif);
+      setMateriaisMestre(mats);
+      setModalConciliacaoAberto(true);
+    } catch (err: any) {
+      alert("Erro ao verificar conciliação: " + (err?.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Confirmar e Salvar Associações Aprovadas
+  const handleConfirmarConciliacao = async (associacoes: any[]) => {
+    try {
+      await api.confirmarConciliacoes({
+        qcId: selectedQcId || undefined,
+        associacoes
+      });
+      setModalConciliacaoAberto(false);
+      if (selectedQcId) {
+        await handleCarregarQc(selectedQcId);
+      }
+      setSucessoQc("Associações confirmadas e salvas na base permanente de De-Para com sucesso!");
+      setTimeout(() => setSucessoQc(null), 5000);
+    } catch (err: any) {
+      alert("Erro ao confirmar conciliações: " + (err?.response?.data?.message || err.message));
+    }
   };
 
   // --- LÓGICA DE EDIÇÃO INLINE DO QC E ORÇAMENTOS ---
@@ -1415,6 +1471,15 @@ Equipe de Suprimentos - Makinsthal`;
                         >
                           <Pencil className="w-3.5 h-3.5" />
                           <span>Atualizar QC</span>
+                        </button>
+
+                        <button
+                          onClick={handleAbrirConciliacaoManual}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 text-xs font-semibold transition cursor-pointer shadow-sm active:scale-95"
+                          title="Verificar discrepâncias e conciliar materiais com a base de conhecimento"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Conciliação Inteligente</span>
                         </button>
 
                         <button
@@ -2676,6 +2741,17 @@ Equipe de Suprimentos - Makinsthal`;
             </div>
           </div>
         </div>,
+        document.body
+      )}
+
+      {/* MODAL DE CONCILIAÇÃO INTELIGENTE DE ITENS (APRENDIZADO PROGRESSIVO) */}
+      {modalConciliacaoAberto && verificacaoConciliacao && createPortal(
+        <ModalConciliacaoQc
+          verificacao={verificacaoConciliacao}
+          materiaisMestre={materiaisMestre}
+          onConfirmar={handleConfirmarConciliacao}
+          onIgnorar={() => setModalConciliacaoAberto(false)}
+        />,
         document.body
       )}
 

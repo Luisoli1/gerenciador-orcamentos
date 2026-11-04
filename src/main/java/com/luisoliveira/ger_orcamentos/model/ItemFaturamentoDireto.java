@@ -26,6 +26,13 @@ public class ItemFaturamentoDireto implements Serializable {
     @JoinColumn(name = "faturamento_direto_id", nullable = false)
     private FaturamentoDireto faturamentoDireto;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "item_canonico_id")
+    private ItemCanonico itemCanonico;
+
+    public ItemCanonico getItemCanonico() { return itemCanonico; }
+    public void setItemCanonico(ItemCanonico itemCanonico) { this.itemCanonico = itemCanonico; }
+
     public ItemFaturamentoDireto() {}
 
     public ItemFaturamentoDireto(Integer itemSeq, String descricao, String unidade, BigDecimal quantidade, BigDecimal precoUnitario, BigDecimal valorTotal) {

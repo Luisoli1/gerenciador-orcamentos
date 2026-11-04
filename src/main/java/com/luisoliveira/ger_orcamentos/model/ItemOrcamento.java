@@ -28,6 +28,18 @@ public class ItemOrcamento implements Serializable {
     @JoinColumn(name = "orcamento_id", nullable = false)
     private Orcamento orcamento;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "item_canonico_id")
+    private ItemCanonico itemCanonico;
+
+    public ItemCanonico getItemCanonico() {
+        return itemCanonico;
+    }
+
+    public void setItemCanonico(ItemCanonico itemCanonico) {
+        this.itemCanonico = itemCanonico;
+    }
+
     public Orcamento getOrcamento() {
         return orcamento;
     }

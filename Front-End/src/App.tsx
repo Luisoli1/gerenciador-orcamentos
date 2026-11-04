@@ -9,6 +9,7 @@ import { FornecedoresView } from './views/FornecedoresView';
 import { FaturamentoDiretoView } from './views/FaturamentoDiretoView';
 import { UsuariosView } from './views/UsuariosView';
 import { AuditoriaView } from './views/AuditoriaView';
+import { CatalogoMateriaisView } from './views/CatalogoMateriaisView';
 import { LoginView } from './views/LoginView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Building2, HardHat, FolderDown, Check, X, FolderOpen, Info, ShieldCheck } from 'lucide-react';
@@ -193,6 +194,7 @@ function MainApp() {
             )}
             {activeView === 'fornecedores' && <FornecedoresView />}
             {activeView === 'faturamento' && <FaturamentoDiretoView obraId={obraId} />}
+            {activeView === 'catalogo' && <CatalogoMateriaisView />}
             {activeView === 'usuarios' && isDono && <UsuariosView />}
             {activeView === 'auditoria' && isDono && <AuditoriaView />}
           </div>

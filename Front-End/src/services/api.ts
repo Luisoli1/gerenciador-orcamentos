@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Obra, Fornecedor, QuadroComparativoDto, Qc, OrcamentoSalvo, ItemVariacaoDto, ConflitoQcDto, FaturamentoDireto, Usuario, LoginRequest, LoginResponse, AuditoriaLog, Role } from '../types';
+import type { Obra, Fornecedor, QuadroComparativoDto, Qc, OrcamentoSalvo, ItemVariacaoDto, ConflitoQcDto, FaturamentoDireto, Usuario, LoginRequest, LoginResponse, AuditoriaLog, Role, ItemCanonico, ItemAlias, VerificacaoConciliacaoResponse, ConversaoPadrao } from '../types';
 import { salvarArquivo } from '../utils/fileDownloader';
 
 
@@ -337,6 +337,47 @@ export const api = {
 
   listarAuditoriaPorEntidade: async (entidade: string): Promise<AuditoriaLog[]> => {
     const res = await axios.get(`${API_BASE_URL}/auditoria/entidade/${entidade}`);
+    return res.data;
+  },
+
+  // --- CONCILIAÇÃO & CADASTRO MESTRE (DE-PARA) ---
+  listarAliases: async (filtro?: string): Promise<ItemAlias[]> => {
+    const url = filtro ? `${API_BASE_URL}/conciliacao/aliases?filtro=${encodeURIComponent(filtro)}` : `${API_BASE_URL}/conciliacao/aliases`;
+    const res = await axios.get(url);
+    return res.data;
+  },
+
+  reassociarAlias: async (id: number, data: { novoItemCanonicoId?: number; novaDescricaoCanonico?: string; unidadePadrao?: string; categoria?: string }): Promise<ItemAlias> => {
+    const res = await axios.put(`${API_BASE_URL}/conciliacao/aliases/${id}`, data);
+    return res.data;
+  },
+
+  inativarAlias: async (id: number): Promise<void> => {
+    await axios.delete(`${API_BASE_URL}/conciliacao/aliases/${id}`);
+  },
+
+  listarMateriaisMestre: async (termo?: string): Promise<ItemCanonico[]> => {
+    const url = termo ? `${API_BASE_URL}/conciliacao/materiais?termo=${encodeURIComponent(termo)}` : `${API_BASE_URL}/conciliacao/materiais`;
+    const res = await axios.get(url);
+    return res.data;
+  },
+
+  criarMaterialMestre: async (data: { descricaoPadrao: string; unidadePadrao: string; categoria?: string; codigoNcm?: string; codigoReferencia?: string }): Promise<ItemCanonico> => {
+    const res = await axios.post(`${API_BASE_URL}/conciliacao/materiais`, data);
+    return res.data;
+  },
+
+  verificarDiscrepancias: async (comparativo: QuadroComparativoDto): Promise<VerificacaoConciliacaoResponse> => {
+    const res = await axios.post(`${API_BASE_URL}/conciliacao/verificar-discrepancias`, comparativo);
+    return res.data;
+  },
+
+  confirmarConciliacoes: async (data: { qcId?: number; associacoes: any[] }): Promise<void> => {
+    await axios.post(`${API_BASE_URL}/conciliacao/confirmar`, data);
+  },
+
+  listarConversoesPadrao: async (): Promise<ConversaoPadrao[]> => {
+    const res = await axios.get(`${API_BASE_URL}/conciliacao/conversoes`);
     return res.data;
   },
 };

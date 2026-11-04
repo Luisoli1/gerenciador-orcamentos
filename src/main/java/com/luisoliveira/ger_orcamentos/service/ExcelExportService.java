@@ -25,6 +25,9 @@ import java.util.Optional;
 @Service
 public class ExcelExportService {
 
+   @org.springframework.beans.factory.annotation.Autowired(required = false)
+   private ConciliacaoService conciliacaoService;
+
    public ByteArrayInputStream gerarQuadroComparativoExcel(QuadroComparativoDto comparativo) {
       ByteArrayOutputStream out = new ByteArrayOutputStream();
 
@@ -384,6 +387,19 @@ public class ExcelExportService {
 
    public boolean saoItensEquivalentes(String descA, String descB) {
       if (descA == null || descB == null) return false;
+
+      // 0. Base de Conhecimento De-Para (Item Canônico em Comum)
+      if (conciliacaoService != null) {
+         try {
+            var sugA = conciliacaoService.resolverConciliacao(descA, null, null, null, null, null, null);
+            var sugB = conciliacaoService.resolverConciliacao(descB, null, null, null, null, null, null);
+            if (sugA != null && sugB != null && sugA.itemCanonicoSugeridoId() != null &&
+                    sugA.itemCanonicoSugeridoId().equals(sugB.itemCanonicoSugeridoId())) {
+               return true;
+            }
+         } catch (Exception ignored) {}
+      }
+
       String normA = normalizarParaComparacao(descA);
       String normB = normalizarParaComparacao(descB);
 

@@ -17,3 +17,4 @@ EXPOSE 8080
 ENV JAVA_OPTS="-XX:+UseSerialGC -Xmx350m -Xms150m -XX:MaxRAMPercentage=75.0"
 
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+

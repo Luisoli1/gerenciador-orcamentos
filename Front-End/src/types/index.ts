@@ -48,7 +48,7 @@ export interface VariationItem {
   alert: boolean;
 }
 
-export type ViewKey = "qc" | "variation" | "obras" | "fornecedores" | "faturamento";
+export type ViewKey = "qc" | "variation" | "obras" | "fornecedores" | "faturamento" | "catalogo" | "auditoria" | "usuarios";
 
 // --- DTOs integrados com Spring Boot ---
 
@@ -308,3 +308,80 @@ export interface AuditoriaLog {
   idRegistro?: string;
   detalhes: string;
 }
+
+// --- CONCILIAÇÃO & CADASTRO MESTRE DE MATERIAIS ---
+
+export interface ItemCanonico {
+  id: number;
+  codigoReferencia?: string;
+  codigoNcm?: string;
+  descricaoPadrao: string;
+  descricaoNormalizada: string;
+  unidadePadrao: string;
+  categoria?: string;
+  ativo: boolean;
+  criadoPor?: string;
+  dataCriacao?: string;
+}
+
+export interface ItemAlias {
+  id: number;
+  descricaoOriginal: string;
+  descricaoNormalizada: string;
+  origem: string;
+  vezesUtilizado: number;
+  fornecedorId?: number;
+  fornecedorNome?: string;
+  itemCanonicoId: number;
+  itemCanonicoDescricao: string;
+  itemCanonicoUnidade: string;
+  criadoPorNome?: string;
+  dataCriacao?: string;
+  alteradoPorNome?: string;
+  dataAtualizacao?: string;
+}
+
+export interface SugestaoConciliacao {
+  itemDescricaoOriginal: string;
+  fornecedorNome: string;
+  fornecedorId?: number;
+  itemCanonicoSugeridoId?: number;
+  itemCanonicoSugeridoDescricao?: string;
+  confianca: number;
+  justificativa: string;
+  origemSugestao: string;
+  unidadeOriginal?: string;
+  unidadeCanonico?: string;
+  fatorConversao?: number;
+  quantidadeOriginal?: number;
+  quantidadeConvertida?: number;
+  precoUnitarioOriginal?: number;
+  precoUnitarioConvertido?: number;
+}
+
+export interface DiscrepanciaItem {
+  descricaoItem: string;
+  fornecedorPresente: string;
+  fornecedoresFaltantes: string[];
+  possiveisEquivalentes: SugestaoConciliacao[];
+}
+
+export interface VerificacaoConciliacaoResponse {
+  possuiDiscrepancia: boolean;
+  totalLinhasQc: number;
+  maiorOrcamentoLinhas: number;
+  menorOrcamentoLinhas: number;
+  mensagemAlerta: string;
+  sugestoes: SugestaoConciliacao[];
+  discrepancias: DiscrepanciaItem[];
+}
+
+export interface ConversaoPadrao {
+  id: number;
+  unidadeOrigem: string;
+  unidadeDestino: string;
+  fatorMultiplicador: number;
+  descricaoRegra?: string;
+  ativo?: boolean;
+}
+

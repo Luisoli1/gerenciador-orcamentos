@@ -10,7 +10,8 @@ import {
   ShieldAlert, 
   LogOut, 
   Shield, 
-  User 
+  User,
+  BookOpen
 } from 'lucide-react';
 import type { ViewKey } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -101,6 +102,18 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
           >
             <ReceiptText className="w-4 h-4" />
             <span>Faturamento Direto</span>
+          </button>
+
+          <button
+            onClick={() => onViewChange('catalogo')}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+              activeView === 'catalogo' 
+                ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20' 
+                : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Catálogo & Sinônimos</span>
           </button>
 
           {/* Menus Exclusivos do Dono */}

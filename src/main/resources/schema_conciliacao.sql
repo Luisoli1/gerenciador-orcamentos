@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS tb_item_canonico (
     descricao_normalizada VARCHAR(255) NOT NULL,
     unidade_padrao VARCHAR(20) NOT NULL DEFAULT 'UN',
     categoria VARCHAR(100) NULL,
+    subcategoria VARCHAR(100) NULL,
+    aplicacoes VARCHAR(500) NULL,
+    caracteristicas VARCHAR(1000) NULL,
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
     data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     criado_por VARCHAR(100) NULL,
@@ -97,4 +100,45 @@ CREATE TABLE IF NOT EXISTS tb_item_conversao_unidade (
 -- 7. Inclusão da FK em tb_item_orcamento e tb_item_faturamento_direto
 ALTER TABLE tb_item_orcamento ADD COLUMN IF NOT EXISTS item_canonico_id BIGINT NULL;
 ALTER TABLE tb_item_faturamento_direto ADD COLUMN IF NOT EXISTS item_canonico_id BIGINT NULL;
+
+-- 8. Fila de Treinamento e Validação em Massa de Materiais
+CREATE TABLE IF NOT EXISTS tb_item_treinamento_fila (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    descricao_bruta VARCHAR(255) NOT NULL,
+    descricao_normalizada VARCHAR(255) NOT NULL,
+    unidade_bruta VARCHAR(20) NULL,
+    fornecedor_origem VARCHAR(100) NULL,
+    documento_origem VARCHAR(255) NULL,
+    tipo_fonte VARCHAR(50) NOT NULL DEFAULT 'ORCAMENTO_HISTORICO',
+    status VARCHAR(30) NOT NULL DEFAULT 'PENDENTE',
+    item_canonico_escolhido_id BIGINT NULL,
+    confianca_sugerida INT NULL,
+    categoria_sugerida VARCHAR(100) NULL,
+    subcategoria_sugerida VARCHAR(100) NULL,
+    aplicacoes_sugeridas VARCHAR(500) NULL,
+    caracteristicas_sugeridas VARCHAR(1000) NULL,
+    fabricante_sugerido VARCHAR(100) NULL,
+    codigo_fabricante_sugerido VARCHAR(100) NULL,
+    data_extracao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    validado_por VARCHAR(100) NULL,
+    data_validacao DATETIME NULL,
+    CONSTRAINT fk_treinamento_canonico FOREIGN KEY (item_canonico_escolhido_id) REFERENCES tb_item_canonico(id) ON DELETE SET NULL,
+    INDEX idx_treinamento_status (status),
+    INDEX idx_treinamento_norm (descricao_normalizada)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 9. Evolução de classificação técnica auxiliar no Item Canônico
+ALTER TABLE tb_item_canonico 
+    ADD COLUMN IF NOT EXISTS subcategoria VARCHAR(100) NULL,
+    ADD COLUMN IF NOT EXISTS aplicacoes VARCHAR(500) NULL,
+    ADD COLUMN IF NOT EXISTS caracteristicas VARCHAR(1000) NULL;
+
+ALTER TABLE tb_item_treinamento_fila
+    ADD COLUMN IF NOT EXISTS categoria_sugerida VARCHAR(100) NULL,
+    ADD COLUMN IF NOT EXISTS subcategoria_sugerida VARCHAR(100) NULL,
+    ADD COLUMN IF NOT EXISTS aplicacoes_sugeridas VARCHAR(500) NULL,
+    ADD COLUMN IF NOT EXISTS caracteristicas_sugeridas VARCHAR(1000) NULL,
+    ADD COLUMN IF NOT EXISTS fabricante_sugerido VARCHAR(100) NULL,
+    ADD COLUMN IF NOT EXISTS codigo_fabricante_sugerido VARCHAR(100) NULL;
+
 

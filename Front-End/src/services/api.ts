@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Obra, Fornecedor, QuadroComparativoDto, Qc, OrcamentoSalvo, ItemVariacaoDto, ConflitoQcDto, FaturamentoDireto, Usuario, LoginRequest, LoginResponse, AuditoriaLog, Role, ItemCanonico, ItemAlias, VerificacaoConciliacaoResponse, ConversaoPadrao, ItemTreinamento, ValidarItemTreinamentoRequest, EstatisticasTreinamento, ItemQuadroDTO } from '../types';
+import type { Obra, Fornecedor, QuadroComparativoDto, Qc, OrcamentoSalvo, ItemVariacaoDto, ConflitoQcDto, FaturamentoDireto, Usuario, LoginRequest, LoginResponse, AuditoriaLog, Role, ItemCanonico, ItemAlias, VerificacaoConciliacaoResponse, ConversaoPadrao, ItemTreinamento, ValidarItemTreinamentoRequest, EstatisticasTreinamento, ItemQuadroDTO, ClassificacaoTecnica } from '../types';
 import { salvarArquivo } from '../utils/fileDownloader';
 
 
@@ -362,7 +362,7 @@ export const api = {
     return res.data;
   },
 
-  criarMaterialMestre: async (data: { descricaoPadrao: string; unidadePadrao: string; categoria?: string; codigoNcm?: string; codigoReferencia?: string }): Promise<ItemCanonico> => {
+  criarMaterialMestre: async (data: { descricaoPadrao: string; unidadePadrao: string; categoria?: string; subcategoria?: string; aplicacoes?: string; caracteristicas?: string; codigoNcm?: string; codigoReferencia?: string }): Promise<ItemCanonico> => {
     const res = await axios.post(`${API_BASE_URL}/conciliacao/materiais`, data);
     return res.data;
   },
@@ -411,6 +411,11 @@ export const api = {
     if (tipoFonte) params.append('tipoFonte', tipoFonte);
 
     const res = await axios.post(`${API_BASE_URL}/conciliacao/treinamento/enfileirar?${params.toString()}`, itens);
+    return res.data;
+  },
+
+  extrairClassificacaoTecnica: async (texto: string): Promise<ClassificacaoTecnica> => {
+    const res = await axios.get(`${API_BASE_URL}/conciliacao/classificacao/extrair?texto=${encodeURIComponent(texto)}`);
     return res.data;
   },
 };

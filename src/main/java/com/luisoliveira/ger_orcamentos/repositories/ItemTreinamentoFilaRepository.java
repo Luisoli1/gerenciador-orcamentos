@@ -22,3 +22,4 @@ public interface ItemTreinamentoFilaRepository extends JpaRepository<ItemTreinam
     @Query("SELECT COUNT(f) > 0 FROM ItemTreinamentoFila f WHERE f.descricaoNormalizada = :norm AND (:fornecedor IS NULL OR f.fornecedorOrigem = :fornecedor)")
     boolean existsByDescricaoNormalizadaAndFornecedor(@Param("norm") String norm, @Param("fornecedor") String fornecedor);
 }
+

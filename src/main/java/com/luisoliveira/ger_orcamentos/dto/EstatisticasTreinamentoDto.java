@@ -7,3 +7,4 @@ public record EstatisticasTreinamentoDto(
         long totalGeral,
         double percentualConcluido
 ) {}
+

@@ -10,5 +10,11 @@ public record ItemTreinamentoDto(
         String documentoOrigem,
         String tipoFonte,
         String status,
+        String categoriaSugerida,
+        String subcategoriaSugerida,
+        List<String> aplicacoesSugeridas,
+        List<String> caracteristicasSugeridas,
+        String fabricanteSugerido,
+        String codigoFabricanteSugerido,
         List<SugestaoItemTreinamentoDto> sugestoes
 ) {}

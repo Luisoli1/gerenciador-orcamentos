@@ -32,6 +32,15 @@ public class ItemCanonico implements Serializable {
     @Column(name = "categoria", length = 100)
     private String categoria;
 
+    @Column(name = "subcategoria", length = 100)
+    private String subcategoria;
+
+    @Column(name = "aplicacoes", length = 500)
+    private String aplicacoes;
+
+    @Column(name = "caracteristicas", length = 1000)
+    private String caracteristicas;
+
     @Column(name = "ativo", nullable = false)
     private boolean ativo = true;
 
@@ -107,6 +116,30 @@ public class ItemCanonico implements Serializable {
 
     public void setCategoria(String categoria) {
         this.categoria = categoria;
+    }
+
+    public String getSubcategoria() {
+        return subcategoria;
+    }
+
+    public void setSubcategoria(String subcategoria) {
+        this.subcategoria = subcategoria;
+    }
+
+    public String getAplicacoes() {
+        return aplicacoes;
+    }
+
+    public void setAplicacoes(String aplicacoes) {
+        this.aplicacoes = aplicacoes;
+    }
+
+    public String getCaracteristicas() {
+        return caracteristicas;
+    }
+
+    public void setCaracteristicas(String caracteristicas) {
+        this.caracteristicas = caracteristicas;
     }
 
     public boolean isAtivo() {

@@ -61,9 +61,13 @@ export function CatalogoMateriaisView() {
   const [cadDescricao, setCadDescricao] = useState('');
   const [cadUnidade, setCadUnidade] = useState('UN');
   const [cadCategoria, setCadCategoria] = useState('');
+  const [cadSubcategoria, setCadSubcategoria] = useState('');
+  const [cadAplicacoes, setCadAplicacoes] = useState('');
+  const [cadCaracteristicas, setCadCaracteristicas] = useState('');
   const [cadNcm, setCadNcm] = useState('');
   const [cadCodigo, setCadCodigo] = useState('');
   const [salvandoMaterial, setSalvandoMaterial] = useState(false);
+  const [extraindoClassificacao, setExtraindoClassificacao] = useState(false);
 
   // Estados de Conversões
   const [conversoes, setConversoes] = useState<ConversaoPadrao[]>([]);
@@ -76,6 +80,9 @@ export function CatalogoMateriaisView() {
   const [novoTreinoDescricao, setNovoTreinoDescricao] = useState('');
   const [novoTreinoUnidade, setNovoTreinoUnidade] = useState('UN');
   const [novoTreinoCategoria, setNovoTreinoCategoria] = useState('');
+  const [novoTreinoSubcategoria, setNovoTreinoSubcategoria] = useState('');
+  const [novoTreinoAplicacoes, setNovoTreinoAplicacoes] = useState('');
+  const [novoTreinoCaracteristicas, setNovoTreinoCaracteristicas] = useState('');
   const [cadastrarConversaoTreino, setCadastrarConversaoTreino] = useState(false);
   const [fatorConversaoTreino, setFatorConversaoTreino] = useState<number>(1);
   const [processandoTreino, setProcessandoTreino] = useState(false);
@@ -123,6 +130,10 @@ export function CatalogoMateriaisView() {
         setSugestaoEscolhidaIdx(0);
         setNovoTreinoDescricao(proximo.descricaoBruta);
         setNovoTreinoUnidade(proximo.unidadeBruta || 'UN');
+        setNovoTreinoCategoria(proximo.categoriaSugerida || '');
+        setNovoTreinoSubcategoria(proximo.subcategoriaSugerida || '');
+        setNovoTreinoAplicacoes(proximo.aplicacoesSugeridas?.join(', ') || '');
+        setNovoTreinoCaracteristicas(proximo.caracteristicasSugeridas?.join(', ') || '');
         setCadastrarConversaoTreino(false);
         setFatorConversaoTreino(1);
       }
@@ -226,6 +237,24 @@ export function CatalogoMateriaisView() {
     }
   };
 
+  // Auto-classificar com IA na criação de Material Mestre
+  const handleAutoClassificar = async () => {
+    if (!cadDescricao.trim()) return;
+    setExtraindoClassificacao(true);
+    try {
+      const info = await api.extrairClassificacaoTecnica(cadDescricao.trim());
+      if (info.categoria) setCadCategoria(info.categoria);
+      if (info.subcategoria) setCadSubcategoria(info.subcategoria);
+      if (info.aplicacoes && info.aplicacoes.length > 0) setCadAplicacoes(info.aplicacoes.join(', '));
+      if (info.caracteristicas && info.caracteristicas.length > 0) setCadCaracteristicas(info.caracteristicas.join(', '));
+      if (info.unidadeSugerida) setCadUnidade(info.unidadeSugerida);
+    } catch (e) {
+      console.error('Erro na extração de classificação:', e);
+    } finally {
+      setExtraindoClassificacao(false);
+    }
+  };
+
   // Criar Novo Material Mestre
   const handleCriarMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -240,6 +269,9 @@ export function CatalogoMateriaisView() {
         descricaoPadrao: cadDescricao.trim(),
         unidadePadrao: cadUnidade,
         categoria: cadCategoria.trim() || undefined,
+        subcategoria: cadSubcategoria.trim() || undefined,
+        aplicacoes: cadAplicacoes.trim() || undefined,
+        caracteristicas: cadCaracteristicas.trim() || undefined,
         codigoNcm: cadNcm.trim() || undefined,
         codigoReferencia: cadCodigo.trim() || undefined,
       });
@@ -248,6 +280,9 @@ export function CatalogoMateriaisView() {
       setModalNovoMaterial(false);
       setCadDescricao('');
       setCadCategoria('');
+      setCadSubcategoria('');
+      setCadAplicacoes('');
+      setCadCaracteristicas('');
       setCadNcm('');
       setCadCodigo('');
       setTimeout(() => setSucesso(null), 4000);
@@ -332,6 +367,9 @@ export function CatalogoMateriaisView() {
         novaDescricaoCanonico: opcaoTreino === 'novo' ? novoTreinoDescricao.trim() : undefined,
         unidadePadrao: novoTreinoUnidade,
         categoria: novoTreinoCategoria || undefined,
+        subcategoria: novoTreinoSubcategoria || undefined,
+        aplicacoes: novoTreinoAplicacoes || undefined,
+        caracteristicas: novoTreinoCaracteristicas || undefined,
         cadastrarConversao: cadastrarConversaoTreino,
         fatorConversao: cadastrarConversaoTreino ? Number(fatorConversaoTreino) : undefined,
       });
@@ -346,6 +384,10 @@ export function CatalogoMateriaisView() {
         setSugestaoEscolhidaIdx(0);
         setNovoTreinoDescricao(proximo.descricaoBruta);
         setNovoTreinoUnidade(proximo.unidadeBruta || 'UN');
+        setNovoTreinoCategoria(proximo.categoriaSugerida || '');
+        setNovoTreinoSubcategoria(proximo.subcategoriaSugerida || '');
+        setNovoTreinoAplicacoes(proximo.aplicacoesSugeridas?.join(', ') || '');
+        setNovoTreinoCaracteristicas(proximo.caracteristicasSugeridas?.join(', ') || '');
         setCadastrarConversaoTreino(false);
         setFatorConversaoTreino(1);
       }
@@ -590,6 +632,60 @@ export function CatalogoMateriaisView() {
                 </div>
               </div>
 
+              {/* CLASSIFICAÇÃO TÉCNICA ESTRUTURADA IDENTIFICADA PELA IA */}
+              <div className="p-4 bg-slate-900/90 border border-slate-700/80 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-cyan-400" />
+                    Classificação Técnica Extraída Automaticamente:
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Atributos auxiliares para busca, filtros e IA
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {itemTreinando.categoriaSugerida && (
+                    <span className="px-2.5 py-1 bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-semibold">
+                      📁 Categoria: {itemTreinando.categoriaSugerida}
+                    </span>
+                  )}
+                  {itemTreinando.subcategoriaSugerida && (
+                    <span className="px-2.5 py-1 bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 rounded-lg text-xs font-semibold">
+                      🏷️ Subcategoria: {itemTreinando.subcategoriaSugerida}
+                    </span>
+                  )}
+                  {itemTreinando.aplicacoesSugeridas && itemTreinando.aplicacoesSugeridas.map((app, i) => (
+                    <span key={i} className="px-2.5 py-1 bg-blue-500/10 text-blue-300 border border-blue-500/20 rounded-lg text-xs">
+                      🏢 Aplicação: {app}
+                    </span>
+                  ))}
+                  {itemTreinando.caracteristicasSugeridas && itemTreinando.caracteristicasSugeridas.map((car, i) => (
+                    <span key={i} className="px-2.5 py-1 bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-lg text-xs font-mono">
+                      ⚡ {car}
+                    </span>
+                  ))}
+                  {itemTreinando.fabricanteSugerido && (
+                    <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 rounded-lg text-xs">
+                      🏭 Fabricante: {itemTreinando.fabricanteSugerido}
+                    </span>
+                  )}
+                </div>
+
+                {/* DIRETRIZ FUNDAMENTAL: FINALIDADE NÃO GERA MERGE */}
+                <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl flex items-start gap-2.5 text-xs text-amber-200/90">
+                  <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-amber-300 font-bold block mb-0.5">
+                      Diretriz Makinsthal: Mesma aplicação não significa mesmo produto!
+                    </strong>
+                    <span>
+                      Materiais com a mesma finalidade (ex: <em>Laje</em>) porém com tecnologias distintas (ex: <em>Ponta Azul</em> vs <em>Convencional</em>, ou <em>Skybox Selada</em> vs <em>Snap Fit</em>) devem ser mantidos como <strong>materiais separados [N]</strong> para comparar alternativas no QC.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {/* OPÇÃO 1: SUGESTÕES DA IA / SINTÁTICO */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -611,36 +707,55 @@ export function CatalogoMateriaisView() {
                         setOpcaoTreino('sugestao');
                         setSugestaoEscolhidaIdx(idx);
                       }}
-                      className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                      className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
                         opcaoTreino === 'sugestao' && sugestaoEscolhidaIdx === idx
                           ? 'bg-amber-500/10 border-amber-500 shadow-lg shadow-amber-500/5'
                           : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs border ${
+                      <div className="flex items-start gap-3 flex-1">
+                        <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs border shrink-0 mt-0.5 ${
                           opcaoTreino === 'sugestao' && sugestaoEscolhidaIdx === idx
                             ? 'bg-amber-500 text-slate-950 border-amber-500'
                             : 'bg-slate-800 text-slate-400 border-slate-700'
                         }`}>
                           {idx + 1}
                         </span>
-                        <div>
-                          <div className="flex items-center gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-bold text-sm text-slate-100">
                               {sug.descricaoPadrao}
                             </span>
                             <span className="px-1.5 py-0.5 bg-slate-800 text-slate-400 text-[10px] font-mono rounded">
                               {sug.unidadePadrao}
                             </span>
+                            {sug.categoria && (
+                              <span className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-300 text-[10px] rounded border border-indigo-500/20">
+                                {sug.categoria}
+                              </span>
+                            )}
+                            {sug.subcategoria && (
+                              <span className="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-300 text-[10px] rounded border border-cyan-500/20">
+                                {sug.subcategoria}
+                              </span>
+                            )}
                           </div>
-                          <span className="text-xs text-slate-400 mt-0.5 block">
+                          
+                          <span className="text-xs text-slate-400 block">
                             {sug.justificativa}
                           </span>
+
+                          {/* ALERTA DE DIVERGÊNCIA TÉCNICA */}
+                          {sug.avisoDivergenciaTecnica && (
+                            <div className="p-2 bg-amber-500/15 border border-amber-500/30 rounded-lg text-xs text-amber-300 flex items-start gap-1.5 mt-1">
+                              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                              <span>{sug.avisoDivergenciaTecnica}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 self-end md:self-center">
                         <span className={`px-2.5 py-1 rounded-xl text-xs font-bold border font-mono ${
                           sug.confianca >= 80
                             ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
@@ -700,35 +815,89 @@ export function CatalogoMateriaisView() {
 
                     {/* CAMPOS EXPANDIDOS QUANDO 'NOVO' ESTIVER SELECIONADO */}
                     {opcaoTreino === 'novo' && (
-                      <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div className="md:col-span-2">
-                          <label className="text-xs font-semibold text-slate-300 block mb-1">
-                            Descrição Padronizada do Novo Material:
-                          </label>
-                          <input
-                            type="text"
-                            value={novoTreinoDescricao}
-                            onChange={(e) => setNovoTreinoDescricao(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
-                          />
+                      <div className="mt-4 pt-4 border-t border-slate-800 space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="md:col-span-2">
+                            <label className="text-xs font-semibold text-slate-300 block mb-1">
+                              Descrição Padronizada do Novo Material:
+                            </label>
+                            <input
+                              type="text"
+                              value={novoTreinoDescricao}
+                              onChange={(e) => setNovoTreinoDescricao(e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-slate-300 block mb-1">
+                              Unidade Base:
+                            </label>
+                            <select
+                              value={novoTreinoUnidade}
+                              onChange={(e) => setNovoTreinoUnidade(e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                            >
+                              <option value="M">M (Metro)</option>
+                              <option value="UN">UN (Unidade)</option>
+                              <option value="BARRA">BARRA (Barra)</option>
+                              <option value="PÇ">PÇ (Peça)</option>
+                              <option value="KG">KG (Quilo)</option>
+                              <option value="ROLO">ROLO (Rolo)</option>
+                              <option value="CX">CX (Caixa)</option>
+                            </select>
+                          </div>
                         </div>
-                        <div>
-                          <label className="text-xs font-semibold text-slate-300 block mb-1">
-                            Unidade Base:
-                          </label>
-                          <select
-                            value={novoTreinoUnidade}
-                            onChange={(e) => setNovoTreinoUnidade(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
-                          >
-                            <option value="M">M (Metro)</option>
-                            <option value="UN">UN (Unidade)</option>
-                            <option value="BARRA">BARRA (Barra)</option>
-                            <option value="PÇ">PÇ (Peça)</option>
-                            <option value="KG">KG (Quilo)</option>
-                            <option value="ROLO">ROLO (Rolo)</option>
-                            <option value="CX">CX (Caixa)</option>
-                          </select>
+
+                        {/* CLASSIFICAÇÃO TÉCNICA SUGERIDA */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-1">
+                          <div>
+                            <label className="text-xs font-semibold text-slate-400 block mb-1">
+                              Categoria:
+                            </label>
+                            <input
+                              type="text"
+                              value={novoTreinoCategoria}
+                              onChange={(e) => setNovoTreinoCategoria(e.target.value)}
+                              placeholder="Ex: Eletrodutos"
+                              className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-slate-400 block mb-1">
+                              Subcategoria:
+                            </label>
+                            <input
+                              type="text"
+                              value={novoTreinoSubcategoria}
+                              onChange={(e) => setNovoTreinoSubcategoria(e.target.value)}
+                              placeholder="Ex: Corrugados"
+                              className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-slate-400 block mb-1">
+                              Aplicações (Obra):
+                            </label>
+                            <input
+                              type="text"
+                              value={novoTreinoAplicacoes}
+                              onChange={(e) => setNovoTreinoAplicacoes(e.target.value)}
+                              placeholder="Ex: Laje, Parede"
+                              className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-slate-400 block mb-1">
+                              Características Técnicas:
+                            </label>
+                            <input
+                              type="text"
+                              value={novoTreinoCaracteristicas}
+                              onChange={(e) => setNovoTreinoCaracteristicas(e.target.value)}
+                              placeholder="Ex: Ponta Azul, 20mm"
+                              className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
                         </div>
                       </div>
                     )}
@@ -999,14 +1168,15 @@ export function CatalogoMateriaisView() {
                     <th className="py-3.5 px-4">Código / NCM</th>
                     <th className="py-3.5 px-4">Descrição Padronizada</th>
                     <th className="py-3.5 px-4 text-center">Unidade Base</th>
-                    <th className="py-3.5 px-4">Categoria</th>
+                    <th className="py-3.5 px-4">Categoria / Subcategoria</th>
+                    <th className="py-3.5 px-4">Aplicações & Características</th>
                     <th className="py-3.5 px-4">Criado Em / Por</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
                   {materiais.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-12 text-center text-slate-500">
+                      <td colSpan={6} className="py-12 text-center text-slate-500">
                         Nenhum material mestre cadastrado ainda. Crie um novo acima ou valide itens no Treinador!
                       </td>
                     </tr>
@@ -1030,8 +1200,28 @@ export function CatalogoMateriaisView() {
                             {mat.unidadePadrao}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs text-slate-400">
-                          {mat.categoria || 'Geral'}
+                        <td className="py-3 px-4 text-xs">
+                          <div className="text-slate-300 font-medium">{mat.categoria || 'Geral'}</div>
+                          {mat.subcategoria && (
+                            <div className="text-[11px] text-cyan-400 font-normal">{mat.subcategoria}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-xs">
+                          <div className="flex flex-wrap gap-1 max-w-xs">
+                            {mat.aplicacoes && mat.aplicacoes.split(',').map((app, i) => (
+                              <span key={i} className="px-1.5 py-0.5 bg-blue-500/10 text-blue-300 border border-blue-500/20 rounded text-[10px]">
+                                {app.trim()}
+                              </span>
+                            ))}
+                            {mat.caracteristicas && mat.caracteristicas.split(',').map((car, i) => (
+                              <span key={i} className="px-1.5 py-0.5 bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded text-[10px] font-mono">
+                                {car.trim()}
+                              </span>
+                            ))}
+                            {!mat.aplicacoes && !mat.caracteristicas && (
+                              <span className="text-slate-600 italic text-[11px]">-</span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-xs text-slate-400">
                           <div>{mat.criadoPor || 'Sistema'}</div>
@@ -1299,14 +1489,25 @@ export function CatalogoMateriaisView() {
 
             <form onSubmit={handleCriarMaterial} className="space-y-3.5">
               <div>
-                <label className="text-xs font-semibold text-slate-300">Descrição Padronizada do Material *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-300">Descrição Padronizada do Material *</label>
+                  <button
+                    type="button"
+                    onClick={handleAutoClassificar}
+                    disabled={extraindoClassificacao || !cadDescricao.trim()}
+                    className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1 font-semibold disabled:opacity-40"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>{extraindoClassificacao ? 'Classificando...' : 'Auto-extrair com IA'}</span>
+                  </button>
+                </div>
                 <input
                   type="text"
                   required
                   value={cadDescricao}
                   onChange={(e) => setCadDescricao(e.target.value)}
                   placeholder="Ex: CABO FLEXÍVEL 2,5MM² 750V AZUL"
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
                 />
               </div>
 
@@ -1333,7 +1534,40 @@ export function CatalogoMateriaisView() {
                     type="text"
                     value={cadCategoria}
                     onChange={(e) => setCadCategoria(e.target.value)}
-                    placeholder="Ex: Elétrica"
+                    placeholder="Ex: Eletrodutos"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Subcategoria</label>
+                  <input
+                    type="text"
+                    value={cadSubcategoria}
+                    onChange={(e) => setCadSubcategoria(e.target.value)}
+                    placeholder="Ex: Corrugados"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Aplicações (Obra)</label>
+                  <input
+                    type="text"
+                    value={cadAplicacoes}
+                    onChange={(e) => setCadAplicacoes(e.target.value)}
+                    placeholder="Ex: Laje, Parede"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Características</label>
+                  <input
+                    type="text"
+                    value={cadCaracteristicas}
+                    onChange={(e) => setCadCaracteristicas(e.target.value)}
+                    placeholder="Ex: Ponta Azul, 20mm"
                     className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
                   />
                 </div>

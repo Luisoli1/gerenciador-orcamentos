@@ -210,6 +210,13 @@ export function ModalConciliacaoQc({
                           {sug.justificativa}
                         </p>
                       )}
+
+                      {sug?.alertaEspecificacao && (
+                        <div className="p-2 bg-amber-500/15 border border-amber-500/30 rounded-lg text-xs text-amber-300 flex items-start gap-1.5 mt-1">
+                          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <span>{sug.alertaEspecificacao}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* SELEÇÃO DO MATERIAL CANÔNICO */}

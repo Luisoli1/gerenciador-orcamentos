@@ -4,6 +4,7 @@ import com.luisoliveira.ger_orcamentos.dto.*;
 import com.luisoliveira.ger_orcamentos.model.ConversaoPadrao;
 import com.luisoliveira.ger_orcamentos.model.ItemCanonico;
 import com.luisoliveira.ger_orcamentos.service.ConciliacaoService;
+import com.luisoliveira.ger_orcamentos.service.ClassificadorTecnicoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -17,6 +18,9 @@ public class ConciliacaoController {
 
     @Autowired
     private ConciliacaoService conciliacaoService;
+
+    @Autowired
+    private ClassificadorTecnicoService classificadorTecnicoService;
 
     // --- 1. GESTÃO DE ALIASES (DE-PARA) ---
 
@@ -128,6 +132,12 @@ public class ConciliacaoController {
             @RequestParam(value = "tipoFonte", defaultValue = "ORCAMENTO_HISTORICO") String tipoFonte) {
         int qtd = conciliacaoService.enfileirarItensLote(itens, fornecedor, documento, tipoFonte);
         return ResponseEntity.ok(qtd);
+    }
+
+    @GetMapping("/classificacao/extrair")
+    public ResponseEntity<com.luisoliveira.ger_orcamentos.dto.ClassificacaoTecnicaDto> extrairClassificacao(
+            @RequestParam("texto") String texto) {
+        return ResponseEntity.ok(classificadorTecnicoService.extrairClassificacao(texto));
     }
 }
 

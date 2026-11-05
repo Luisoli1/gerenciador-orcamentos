@@ -17,6 +17,20 @@ public record SugestaoConciliacaoDto(
         BigDecimal quantidadeOriginal,
         BigDecimal quantidadeConvertida,
         BigDecimal precoUnitarioOriginal,
-        BigDecimal precoUnitarioConvertido
-) {}
-
+        BigDecimal precoUnitarioConvertido,
+        String alertaEspecificacao
+) {
+    public SugestaoConciliacaoDto(
+            String itemDescricaoOriginal, String fornecedorNome, Long fornecedorId,
+            Long itemCanonicoSugeridoId, String itemCanonicoSugeridoDescricao,
+            int confianca, String justificativa, String origemSugestao,
+            String unidadeOriginal, String unidadeCanonico,
+            BigDecimal fatorConversao, BigDecimal quantidadeOriginal, BigDecimal quantidadeConvertida,
+            BigDecimal precoUnitarioOriginal, BigDecimal precoUnitarioConvertido
+    ) {
+        this(itemDescricaoOriginal, fornecedorNome, fornecedorId, itemCanonicoSugeridoId,
+                itemCanonicoSugeridoDescricao, confianca, justificativa, origemSugestao,
+                unidadeOriginal, unidadeCanonico, fatorConversao, quantidadeOriginal,
+                quantidadeConvertida, precoUnitarioOriginal, precoUnitarioConvertido, null);
+    }
+}

@@ -1,10 +1,16 @@
 package com.luisoliveira.ger_orcamentos.dto;
 
+import java.util.List;
+
 public record SugestaoItemTreinamentoDto(
         Long itemCanonicoId,
         String descricaoPadrao,
         String unidadePadrao,
         String categoria,
+        String subcategoria,
+        List<String> aplicacoes,
+        List<String> caracteristicas,
         int confianca,
-        String justificativa
+        String justificativa,
+        String avisoDivergenciaTecnica
 ) {}

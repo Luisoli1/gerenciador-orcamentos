@@ -9,6 +9,9 @@ public record ValidarItemTreinamentoRequestDto(
         String novaDescricaoCanonico,
         String unidadePadrao,
         String categoria,
+        String subcategoria,
+        String aplicacoes,
+        String caracteristicas,
         String codigoNcm,
         boolean cadastrarConversao,
         BigDecimal fatorConversao

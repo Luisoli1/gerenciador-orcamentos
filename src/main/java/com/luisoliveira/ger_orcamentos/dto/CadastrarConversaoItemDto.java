@@ -8,3 +8,4 @@ public record CadastrarConversaoItemDto(
         String unidadeDestino,
         BigDecimal fatorMultiplicador
 ) {}
+

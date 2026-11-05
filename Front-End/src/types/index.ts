@@ -319,6 +319,9 @@ export interface ItemCanonico {
   descricaoNormalizada: string;
   unidadePadrao: string;
   categoria?: string;
+  subcategoria?: string;
+  aplicacoes?: string;
+  caracteristicas?: string;
   ativo: boolean;
   criadoPor?: string;
   dataCriacao?: string;
@@ -357,6 +360,7 @@ export interface SugestaoConciliacao {
   quantidadeConvertida?: number;
   precoUnitarioOriginal?: number;
   precoUnitarioConvertido?: number;
+  alertaEspecificacao?: string;
 }
 
 export interface DiscrepanciaItem {
@@ -392,8 +396,12 @@ export interface SugestaoItemTreinamento {
   descricaoPadrao: string;
   unidadePadrao: string;
   categoria?: string;
+  subcategoria?: string;
+  aplicacoes?: string[];
+  caracteristicas?: string[];
   confianca: number;
   justificativa: string;
+  avisoDivergenciaTecnica?: string;
 }
 
 export interface ItemTreinamento {
@@ -404,6 +412,12 @@ export interface ItemTreinamento {
   documentoOrigem?: string;
   tipoFonte: string;
   status: string;
+  categoriaSugerida?: string;
+  subcategoriaSugerida?: string;
+  aplicacoesSugeridas?: string[];
+  caracteristicasSugeridas?: string[];
+  fabricanteSugerido?: string;
+  codigoFabricanteSugerido?: string;
   sugestoes: SugestaoItemTreinamento[];
 }
 
@@ -414,9 +428,22 @@ export interface ValidarItemTreinamentoRequest {
   novaDescricaoCanonico?: string;
   unidadePadrao?: string;
   categoria?: string;
+  subcategoria?: string;
+  aplicacoes?: string;
+  caracteristicas?: string;
   codigoNcm?: string;
   cadastrarConversao?: boolean;
   fatorConversao?: number;
+}
+
+export interface ClassificacaoTecnica {
+  categoria: string;
+  subcategoria?: string;
+  aplicacoes: string[];
+  caracteristicas: string[];
+  fabricante?: string;
+  codigoFabricante?: string;
+  unidadeSugerida: string;
 }
 
 export interface EstatisticasTreinamento {

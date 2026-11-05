@@ -41,6 +41,24 @@ public class ItemTreinamentoFila implements Serializable {
     @Column(name = "confianca_sugerida")
     private Integer confiancaSugerida;
 
+    @Column(name = "categoria_sugerida", length = 100)
+    private String categoriaSugerida;
+
+    @Column(name = "subcategoria_sugerida", length = 100)
+    private String subcategoriaSugerida;
+
+    @Column(name = "aplicacoes_sugeridas", length = 500)
+    private String aplicacoesSugeridas;
+
+    @Column(name = "caracteristicas_sugeridas", length = 1000)
+    private String caracteristicasSugeridas;
+
+    @Column(name = "fabricante_sugerido", length = 100)
+    private String fabricanteSugerido;
+
+    @Column(name = "codigo_fabricante_sugerido", length = 100)
+    private String codigoFabricanteSugerido;
+
     @Column(name = "data_extracao", nullable = false)
     private LocalDateTime dataExtracao = LocalDateTime.now();
 
@@ -143,6 +161,54 @@ public class ItemTreinamentoFila implements Serializable {
         this.confiancaSugerida = confiancaSugerida;
     }
 
+    public String getCategoriaSugerida() {
+        return categoriaSugerida;
+    }
+
+    public void setCategoriaSugerida(String categoriaSugerida) {
+        this.categoriaSugerida = categoriaSugerida;
+    }
+
+    public String getSubcategoriaSugerida() {
+        return subcategoriaSugerida;
+    }
+
+    public void setSubcategoriaSugerida(String subcategoriaSugerida) {
+        this.subcategoriaSugerida = subcategoriaSugerida;
+    }
+
+    public String getAplicacoesSugeridas() {
+        return aplicacoesSugeridas;
+    }
+
+    public void setAplicacoesSugeridas(String aplicacoesSugeridas) {
+        this.aplicacoesSugeridas = aplicacoesSugeridas;
+    }
+
+    public String getCaracteristicasSugeridas() {
+        return caracteristicasSugeridas;
+    }
+
+    public void setCaracteristicasSugeridas(String caracteristicasSugeridas) {
+        this.caracteristicasSugeridas = caracteristicasSugeridas;
+    }
+
+    public String getFabricanteSugerido() {
+        return fabricanteSugerido;
+    }
+
+    public void setFabricanteSugerido(String fabricanteSugerido) {
+        this.fabricanteSugerido = fabricanteSugerido;
+    }
+
+    public String getCodigoFabricanteSugerido() {
+        return codigoFabricanteSugerido;
+    }
+
+    public void setCodigoFabricanteSugerido(String codigoFabricanteSugerido) {
+        this.codigoFabricanteSugerido = codigoFabricanteSugerido;
+    }
+
     public LocalDateTime getDataExtracao() {
         return dataExtracao;
     }
@@ -167,3 +233,4 @@ public class ItemTreinamentoFila implements Serializable {
         this.dataValidacao = dataValidacao;
     }
 }
+

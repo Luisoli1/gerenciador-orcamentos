@@ -41,6 +41,9 @@ public class ConciliacaoService {
     private ItemTreinamentoFilaRepository itemTreinamentoFilaRepository;
 
     @Autowired
+    private ClassificadorTecnicoService classificadorTecnicoService;
+
+    @Autowired
     private AuditoriaService auditoriaService;
 
     @Autowired(required = false)
@@ -209,6 +212,14 @@ public class ConciliacaoService {
 
         for (ItemCanonico mat : materiais) {
             String normMat = mat.getDescricaoNormalizada();
+
+            // REGRA: Mesma finalidade/aplicação não significa mesmo produto!
+            // Conflito de especificações (ex: Ponta Azul vs Convencional, Reforçado vs Leve) bloqueia associação automática
+            String conflito = classificadorTecnicoService.detectarConflitoEspecificacao(norm, normMat);
+            if (conflito != null) {
+                continue;
+            }
+
             if (norm.equals(normMat)) {
                 melhorMatchSintatico = mat;
                 melhorScore = 98;
@@ -560,6 +571,13 @@ public class ConciliacaoService {
         novo.setCodigoNcm(dto.codigoNcm());
         novo.setCodigoReferencia(dto.codigoReferencia());
 
+        // Se usuário forneceu classificações, usa elas; caso contrário, enriquece automaticamente com IA/regras técnicas
+        ClassificacaoTecnicaDto extraida = classificadorTecnicoService.extrairClassificacao(desc);
+        novo.setCategoria((dto.categoria() != null && !dto.categoria().isBlank()) ? dto.categoria() : extraida.categoria());
+        novo.setSubcategoria((dto.subcategoria() != null && !dto.subcategoria().isBlank()) ? dto.subcategoria() : extraida.subcategoria());
+        novo.setAplicacoes((dto.aplicacoes() != null && !dto.aplicacoes().isBlank()) ? dto.aplicacoes() : String.join(", ", extraida.aplicacoes()));
+        novo.setCaracteristicas((dto.caracteristicas() != null && !dto.caracteristicas().isBlank()) ? dto.caracteristicas() : String.join(", ", extraida.caracteristicas()));
+
         ItemCanonico salvo = itemCanonicoRepository.save(novo);
 
         auditoriaService.registrar(
@@ -600,14 +618,24 @@ public class ConciliacaoService {
                 continue;
             }
 
+            ClassificacaoTecnicaDto classif = classificadorTecnicoService.extrairClassificacao(it.descricao());
+            String unid = (it.unidadeMedida() != null && !it.unidadeMedida().isBlank())
+                    ? normalizarUnidade(it.unidadeMedida()) : classif.unidadeSugerida();
+
             ItemTreinamentoFila filaItem = new ItemTreinamentoFila(
                     it.descricao().trim(),
                     norm,
-                    normalizarUnidade(it.unidadeMedida()),
+                    unid,
                     fornecedorOrigem,
                     documentoOrigem,
                     tipoFonte
             );
+            filaItem.setCategoriaSugerida(classif.categoria());
+            filaItem.setSubcategoriaSugerida(classif.subcategoria());
+            filaItem.setAplicacoesSugeridas(String.join(", ", classif.aplicacoes()));
+            filaItem.setCaracteristicasSugeridas(String.join(", ", classif.caracteristicas()));
+            filaItem.setFabricanteSugerido((fornecedorOrigem != null && !fornecedorOrigem.isBlank()) ? fornecedorOrigem : classif.fabricante());
+            filaItem.setCodigoFabricanteSugerido(classif.codigoFabricante());
             itemTreinamentoFilaRepository.save(filaItem);
             novosEnfileirados++;
         }
@@ -621,8 +649,28 @@ public class ConciliacaoService {
         }
 
         ItemTreinamentoFila itemFila = proximoOpt.get();
+
+        // Garante que classificações sugeridas existam mesmo em itens previamente enfileirados
+        if (itemFila.getCategoriaSugerida() == null || itemFila.getCategoriaSugerida().isBlank()) {
+            ClassificacaoTecnicaDto auto = classificadorTecnicoService.extrairClassificacao(itemFila.getDescricaoBruta());
+            itemFila.setCategoriaSugerida(auto.categoria());
+            itemFila.setSubcategoriaSugerida(auto.subcategoria());
+            itemFila.setAplicacoesSugeridas(String.join(", ", auto.aplicacoes()));
+            itemFila.setCaracteristicasSugeridas(String.join(", ", auto.caracteristicas()));
+            itemFila.setFabricanteSugerido(auto.fabricante());
+            itemFila.setCodigoFabricanteSugerido(auto.codigoFabricante());
+            itemTreinamentoFilaRepository.save(itemFila);
+        }
+
         List<ItemCanonico> materiais = itemCanonicoRepository.findByAtivoTrueOrderByDescricaoPadraoAsc();
         List<SugestaoItemTreinamentoDto> sugestoes = gerarTopSugestoes(itemFila.getDescricaoNormalizada(), materiais);
+
+        List<String> appsSug = (itemFila.getAplicacoesSugeridas() != null && !itemFila.getAplicacoesSugeridas().isBlank())
+                ? Arrays.stream(itemFila.getAplicacoesSugeridas().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
+                : List.of();
+        List<String> caracSug = (itemFila.getCaracteristicasSugeridas() != null && !itemFila.getCaracteristicasSugeridas().isBlank())
+                ? Arrays.stream(itemFila.getCaracteristicasSugeridas().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
+                : List.of();
 
         return new ItemTreinamentoDto(
                 itemFila.getId(),
@@ -632,6 +680,12 @@ public class ConciliacaoService {
                 itemFila.getDocumentoOrigem(),
                 itemFila.getTipoFonte(),
                 itemFila.getStatus(),
+                itemFila.getCategoriaSugerida(),
+                itemFila.getSubcategoriaSugerida(),
+                appsSug,
+                caracSug,
+                itemFila.getFabricanteSugerido(),
+                itemFila.getCodigoFabricanteSugerido(),
                 sugestoes
         );
     }
@@ -644,6 +698,10 @@ public class ConciliacaoService {
             String normMat = mat.getDescricaoNormalizada();
             int score = 0;
             String justificativa;
+            String avisoDivergencia = null;
+
+            // REGRA: Checa divergências específicas (ex: Ponta Azul vs Convencional, Reforçado vs Leve, Cores distintas)
+            String conflito = classificadorTecnicoService.detectarConflitoEspecificacao(normItem, normMat);
 
             if (normItem.equals(normMat)) {
                 score = 98;
@@ -660,14 +718,32 @@ public class ConciliacaoService {
                 justificativa = "Similaridade de termos técnicos (" + score + "%).";
             }
 
-            if (score >= 40) {
+            if (conflito != null) {
+                // Penaliza o score fortemente para no máximo 45% e emite aviso explícito
+                score = Math.min(score, 45);
+                avisoDivergencia = conflito;
+                justificativa = conflito;
+            }
+
+            if (score >= 35 || avisoDivergencia != null) {
+                List<String> appsList = (mat.getAplicacoes() != null && !mat.getAplicacoes().isBlank())
+                        ? Arrays.stream(mat.getAplicacoes().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
+                        : List.of();
+                List<String> caracList = (mat.getCaracteristicas() != null && !mat.getCaracteristicas().isBlank())
+                        ? Arrays.stream(mat.getCaracteristicas().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
+                        : List.of();
+
                 lista.add(new SugestaoItemTreinamentoDto(
                         mat.getId(),
                         mat.getDescricaoPadrao(),
                         mat.getUnidadePadrao(),
                         mat.getCategoria(),
+                        mat.getSubcategoria(),
+                        appsList,
+                        caracList,
                         score,
-                        justificativa
+                        justificativa,
+                        avisoDivergencia
                 ));
             }
         }
@@ -698,12 +774,16 @@ public class ConciliacaoService {
             String norm = normalizarTexto(descPadrao);
             canonico = itemCanonicoRepository.findByDescricaoNormalizada(norm)
                     .orElseGet(() -> {
+                        ClassificacaoTecnicaDto extraida = classificadorTecnicoService.extrairClassificacao(descPadrao);
                         ItemCanonico novo = new ItemCanonico(
                                 descPadrao, norm,
                                 (request.unidadePadrao() != null && !request.unidadePadrao().isBlank()) ? request.unidadePadrao() : itemFila.getUnidadeBruta(),
-                                request.categoria(),
+                                (request.categoria() != null && !request.categoria().isBlank()) ? request.categoria() : extraida.categoria(),
                                 usuarioNome
                         );
+                        novo.setSubcategoria((request.subcategoria() != null && !request.subcategoria().isBlank()) ? request.subcategoria() : extraida.subcategoria());
+                        novo.setAplicacoes((request.aplicacoes() != null && !request.aplicacoes().isBlank()) ? request.aplicacoes() : String.join(", ", extraida.aplicacoes()));
+                        novo.setCaracteristicas((request.caracteristicas() != null && !request.caracteristicas().isBlank()) ? request.caracteristicas() : String.join(", ", extraida.caracteristicas()));
                         novo.setCodigoNcm(request.codigoNcm());
                         return itemCanonicoRepository.save(novo);
                     });

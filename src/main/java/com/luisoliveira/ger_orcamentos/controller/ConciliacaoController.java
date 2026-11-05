@@ -134,6 +134,15 @@ public class ConciliacaoController {
         return ResponseEntity.ok(qtd);
     }
 
+    @PostMapping(value = "/treinamento/upload-pdf", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<UploadPdfTreinamentoResponseDto> uploadPdfsTreinamento(
+            @RequestParam("files") List<org.springframework.web.multipart.MultipartFile> files,
+            @RequestParam(value = "tipoFonte", defaultValue = "ORCAMENTO_HISTORICO") String tipoFonte,
+            @RequestParam(value = "fornecedor", required = false) String fornecedor,
+            @RequestParam(value = "documento", required = false) String documento) {
+        return ResponseEntity.ok(conciliacaoService.processarUploadPdfsTreinamento(files, fornecedor, documento, tipoFonte));
+    }
+
     @GetMapping("/classificacao/extrair")
     public ResponseEntity<com.luisoliveira.ger_orcamentos.dto.ClassificacaoTecnicaDto> extrairClassificacao(
             @RequestParam("texto") String texto) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
+import { Dropzone } from '../components/Dropzone';
 import type { 
   ItemAlias, 
   ItemCanonico, 
@@ -23,7 +24,7 @@ import {
   HelpCircle, 
   Tag, 
   ArrowRight, 
-  ShieldCheck,
+  ShieldCheck, 
   ShieldAlert, 
   Calendar, 
   User, 
@@ -34,6 +35,7 @@ import {
   SkipForward, 
   FileText, 
   Upload, 
+  UploadCloud,
   Zap, 
   ChevronRight, 
   Keyboard 
@@ -90,23 +92,25 @@ export function CatalogoMateriaisView() {
   const [fatorConversaoTreino, setFatorConversaoTreino] = useState<number>(1);
   const [processandoTreino, setProcessandoTreino] = useState(false);
 
-  // Modal de Enfileirar Lote
+  // Modal de Enfileirar Lote (PDF ou Manual)
   const [modalLoteAberto, setModalLoteAberto] = useState(false);
+  const [modoImportacao, setModoImportacao] = useState<'pdf' | 'manual'>('pdf');
+  const [arquivosPdf, setArquivosPdf] = useState<File[]>([]);
   const [loteTexto, setLoteTexto] = useState('');
   const [loteFornecedor, setLoteFornecedor] = useState('');
   const [loteDocumento, setLoteDocumento] = useState('');
-  const [loteTipoFonte, setLoteTipoFonte] = useState('ORCAMENTO_HISTORICO');
+  const [loteTipoFonte, setLoteTipoFonte] = useState<'ORCAMENTO_HISTORICO' | 'CATALOGO_FABRICANTE'>('ORCAMENTO_HISTORICO');
   const [enfileirandoLote, setEnfileirandoLote] = useState(false);
 
-  // Carregamento de Dados Gerais
+  // Carregamento de Dados Gerais com fallback resiliente para evitar falsos erros
   const carregarDados = async () => {
     setLoading(true);
     setError(null);
     try {
       const [resAliases, resMateriais, resConversoes, resRegras] = await Promise.all([
-        api.listarAliases(filtroAlias),
-        api.listarMateriaisMestre(filtroMaterial),
-        api.listarConversoesPadrao(),
+        api.listarAliases(filtroAlias).catch(() => []),
+        api.listarMateriaisMestre(filtroMaterial).catch(() => []),
+        api.listarConversoesPadrao().catch(() => []),
         api.listarRegrasAtributosBloqueantes().catch(() => [])
       ]);
       setAliases(resAliases);
@@ -116,7 +120,7 @@ export function CatalogoMateriaisView() {
         setRegrasBloqueantes(resRegras);
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Erro ao carregar catálogo de materiais.');
+      console.warn('Aviso ao carregar dados do catálogo:', err);
     } finally {
       setLoading(false);
     }
@@ -301,7 +305,43 @@ export function CatalogoMateriaisView() {
     }
   };
 
-  // Enfileirar Lote de Textos Históricos
+  // Enfileirar via Upload de Múltiplos PDFs com IA Gemini
+  const handleUploadPdfsTreinamento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (arquivosPdf.length === 0) {
+      alert('Por favor, selecione ao menos um arquivo PDF de catálogo ou orçamento.');
+      return;
+    }
+
+    setEnfileirandoLote(true);
+    try {
+      const resp = await api.uploadPdfsTreinamento(
+        arquivosPdf,
+        loteTipoFonte,
+        loteFornecedor.trim() || undefined,
+        loteDocumento.trim() || undefined
+      );
+
+      let msg = `${resp.totalItensEnfileirados} itens extraídos via IA e enfileirados com sucesso! (${resp.totalArquivosProcessados} PDF(s) processados).`;
+      if (resp.erros && resp.erros.length > 0) {
+        msg += ` Atenção: ${resp.erros.join(', ')}`;
+      }
+      setSucesso(msg);
+      setModalLoteAberto(false);
+      setArquivosPdf([]);
+      setLoteTexto('');
+      setLoteFornecedor('');
+      setLoteDocumento('');
+      setTimeout(() => setSucesso(null), 5000);
+      await carregarFilaTreinamento();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Erro ao processar PDFs com IA.');
+    } finally {
+      setEnfileirandoLote(false);
+    }
+  };
+
+  // Enfileirar Lote de Textos Históricos (Entrada Manual)
   const handleEnfileirarLote = async (e: React.FormEvent) => {
     e.preventDefault();
     const linhas = loteTexto
@@ -1389,30 +1429,117 @@ export function CatalogoMateriaisView() {
         </div>
       )}
 
-      {/* MODAL ENFILEIRAR LOTE DE ITENS HISTÓRICOS */}
+      {/* MODAL ENFILEIRAR LOTE DE ITENS (PDF COM IA OU MANUAL) */}
       {modalLoteAberto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-lg font-bold text-white">Enfileirar Itens para Treinamento</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Cole os termos de orçamentos históricos ou catálogos para alimentar a fila.</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-2xl shadow-2xl p-6 sm:p-7 space-y-5 animate-in fade-in zoom-in-95 duration-150 my-8">
+            
+            {/* CABEÇALHO DO MODAL */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Alimentar Base de Conhecimento</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Importe catálogos ou orçamentos passados para ensinar materiais e sinônimos ao sistema.
+                  </p>
+                </div>
               </div>
-              <button onClick={() => setModalLoteAberto(false)} className="text-slate-400 hover:text-white">
+              <button 
+                onClick={() => {
+                  setModalLoteAberto(false);
+                  setArquivosPdf([]);
+                }} 
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleEnfileirarLote} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+            {/* SELEÇÃO DO MODO DE IMPORTAÇÃO (TABS) */}
+            <div className="grid grid-cols-2 gap-2 bg-slate-950/70 p-1.5 rounded-2xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setModoImportacao('pdf')}
+                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition ${
+                  modoImportacao === 'pdf'
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+              >
+                <UploadCloud className="w-4 h-4" />
+                <span>Upload de PDFs com IA (Recomendado)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setModoImportacao('manual')}
+                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold transition ${
+                  modoImportacao === 'manual'
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+              >
+                <Keyboard className="w-4 h-4" />
+                <span>Digitação / Colar Texto Manual</span>
+              </button>
+            </div>
+
+            <form onSubmit={modoImportacao === 'pdf' ? handleUploadPdfsTreinamento : handleEnfileirarLote} className="space-y-4">
+              
+              {/* TIPO DE DOCUMENTO / FONTE */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 block">Tipo de Fonte de Aprendizado:</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div
+                    onClick={() => setLoteTipoFonte('ORCAMENTO_HISTORICO')}
+                    className={`p-3 rounded-xl border cursor-pointer transition flex items-start gap-2.5 ${
+                      loteTipoFonte === 'ORCAMENTO_HISTORICO'
+                        ? 'bg-amber-500/10 border-amber-500 text-slate-100'
+                        : 'bg-slate-800/60 border-slate-700/80 text-slate-400 hover:border-slate-600'
+                    }`}
+                  >
+                    <FileText className={`w-4 h-4 mt-0.5 flex-shrink-0 ${loteTipoFonte === 'ORCAMENTO_HISTORICO' ? 'text-amber-400' : 'text-slate-400'}`} />
+                    <div>
+                      <span className="text-xs font-bold block text-slate-200">Orçamento Histórico de Obra</span>
+                      <span className="text-[11px] text-slate-400 leading-tight block mt-0.5">
+                        Reflete a linguagem real de fornecedores (ex: CX OCT TETO, FIO FLEX AZUL).
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => setLoteTipoFonte('CATALOGO_FABRICANTE')}
+                    className={`p-3 rounded-xl border cursor-pointer transition flex items-start gap-2.5 ${
+                      loteTipoFonte === 'CATALOGO_FABRICANTE'
+                        ? 'bg-amber-500/10 border-amber-500 text-slate-100'
+                        : 'bg-slate-800/60 border-slate-700/80 text-slate-400 hover:border-slate-600'
+                    }`}
+                  >
+                    <BookOpen className={`w-4 h-4 mt-0.5 flex-shrink-0 ${loteTipoFonte === 'CATALOGO_FABRICANTE' ? 'text-amber-400' : 'text-slate-400'}`} />
+                    <div>
+                      <span className="text-xs font-bold block text-slate-200">Catálogo Oficial de Fabricante</span>
+                      <span className="text-[11px] text-slate-400 leading-tight block mt-0.5">
+                        Portfólio técnico oficial (ex: Tigre, Amanco, Schneider, WEG, Prysmian, Sil).
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* CAMPOS COMPLEMENTARES DE ORIGEM */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Fornecedor / Origem:</label>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">
+                    {loteTipoFonte === 'CATALOGO_FABRICANTE' ? 'Fabricante / Marca:' : 'Fornecedor / Origem:'}
+                  </label>
                   <input
                     type="text"
                     value={loteFornecedor}
                     onChange={(e) => setLoteFornecedor(e.target.value)}
-                    placeholder="Ex: Elecon, Soedral, Tigre"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                    placeholder={loteTipoFonte === 'CATALOGO_FABRICANTE' ? 'Ex: Tigre, Schneider, Amanco, WEG' : 'Ex: Elecon, Soedral, Comercial Silva'}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
                   />
                 </div>
                 <div>
@@ -1421,41 +1548,90 @@ export function CatalogoMateriaisView() {
                     type="text"
                     value={loteDocumento}
                     onChange={(e) => setLoteDocumento(e.target.value)}
-                    placeholder="Ex: Orçamento 1042/2023"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                    placeholder={loteTipoFonte === 'CATALOGO_FABRICANTE' ? 'Ex: Catálogo Predial 2024 Ed. 02' : 'Ex: Orçamento 1042/2023 - Obra Alpha'}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Itens Brutos (Cole um por linha):
-                </label>
-                <textarea
-                  required
-                  rows={8}
-                  value={loteTexto}
-                  onChange={(e) => setLoteTexto(e.target.value)}
-                  placeholder="FIO FLEX AZUL 2,5&#10;CX OCT TETO&#10;COND FLEX 2,5 AZ&#10;TUBO PVC 3/4..."
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 font-mono focus:outline-none focus:border-amber-500"
-                />
-              </div>
+              {/* CONTEÚDO DINÂMICO CONFORME O MODO SELECIONADO */}
+              {modoImportacao === 'pdf' ? (
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-300">
+                      Arquivos PDF (Catálogos ou Orçamentos):
+                    </label>
+                    <span className="text-[11px] text-amber-400 font-semibold flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" />
+                      Extração automática de materiais via IA
+                    </span>
+                  </div>
 
+                  <Dropzone
+                    multiple={true}
+                    onFilesSelected={setArquivosPdf}
+                    label="Clique ou arraste catálogos e orçamentos em PDF aqui"
+                    hint="Suporta múltiplos PDFs simultâneos (Tigre, Amanco, Schneider, etc.). A IA lerá itens, descrições e unidades."
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-xs font-semibold text-slate-300 block">
+                    Itens Brutos (Cole um por linha):
+                  </label>
+                  <textarea
+                    rows={6}
+                    value={loteTexto}
+                    onChange={(e) => setLoteTexto(e.target.value)}
+                    placeholder={"FIO FLEX AZUL 2,5\nCX OCT TETO\nCOND FLEX 2,5 AZ\nTUBO PVC 3/4...\nDISJUNTOR 1P 16A CURVA C"}
+                    className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 font-mono focus:outline-none focus:border-amber-500"
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    Dica: Cada linha será enfileirada individualmente com similaridade semântica e atributos técnicos pré-calculados.
+                  </p>
+                </div>
+              )}
+
+              {/* BOTÕES DE AÇÃO */}
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
                 <button
                   type="button"
-                  onClick={() => setModalLoteAberto(false)}
+                  onClick={() => {
+                    setModalLoteAberto(false);
+                    setArquivosPdf([]);
+                  }}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-medium transition"
                 >
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  disabled={enfileirandoLote}
-                  className="px-6 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-sm shadow-md transition"
-                >
-                  {enfileirandoLote ? 'Enfileirando...' : 'Adicionar à Fila de Treinamento'}
-                </button>
+
+                {modoImportacao === 'pdf' ? (
+                  <button
+                    type="submit"
+                    disabled={enfileirandoLote || arquivosPdf.length === 0}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-sm shadow-lg shadow-amber-500/20 transition cursor-pointer"
+                  >
+                    {enfileirandoLote ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Extraindo dados com IA nos PDFs... aguarde</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Processar {arquivosPdf.length > 0 ? `${arquivosPdf.length} PDF(s)` : 'PDFs'} com IA & Enfileirar</span>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={enfileirandoLote || !loteTexto.trim()}
+                    className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-sm shadow-lg shadow-amber-500/20 transition cursor-pointer"
+                  >
+                    {enfileirandoLote ? 'Enfileirando...' : 'Adicionar à Fila de Treinamento'}
+                  </button>
+                )}
               </div>
             </form>
           </div>

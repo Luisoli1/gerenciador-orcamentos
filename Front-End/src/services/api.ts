@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Obra, Fornecedor, QuadroComparativoDto, Qc, OrcamentoSalvo, ItemVariacaoDto, ConflitoQcDto, FaturamentoDireto, Usuario, LoginRequest, LoginResponse, AuditoriaLog, Role, ItemCanonico, ItemAlias, VerificacaoConciliacaoResponse, ConversaoPadrao, ItemTreinamento, ValidarItemTreinamentoRequest, EstatisticasTreinamento, ItemQuadroDTO, ClassificacaoTecnica, RegraAtributoBloqueante } from '../types';
+import type { Obra, Fornecedor, QuadroComparativoDto, Qc, OrcamentoSalvo, ItemVariacaoDto, ConflitoQcDto, FaturamentoDireto, Usuario, LoginRequest, LoginResponse, AuditoriaLog, Role, ItemCanonico, ItemAlias, VerificacaoConciliacaoResponse, ConversaoPadrao, ItemTreinamento, ValidarItemTreinamentoRequest, EstatisticasTreinamento, ItemQuadroDTO, ClassificacaoTecnica, RegraAtributoBloqueante, UploadPdfTreinamentoResponse } from '../types';
 import { salvarArquivo } from '../utils/fileDownloader';
 
 
@@ -421,6 +421,24 @@ export const api = {
 
   listarRegrasAtributosBloqueantes: async (): Promise<RegraAtributoBloqueante[]> => {
     const res = await axios.get(`${API_BASE_URL}/conciliacao/atributos-bloqueantes`);
+    return res.data;
+  },
+
+  uploadPdfsTreinamento: async (
+    files: File[], 
+    tipoFonte: string = 'ORCAMENTO_HISTORICO', 
+    fornecedor?: string, 
+    documento?: string
+  ): Promise<UploadPdfTreinamentoResponse> => {
+    const formData = new FormData();
+    files.forEach((f) => formData.append('files', f));
+    formData.append('tipoFonte', tipoFonte);
+    if (fornecedor) formData.append('fornecedor', fornecedor);
+    if (documento) formData.append('documento', documento);
+
+    const res = await axios.post(`${API_BASE_URL}/conciliacao/treinamento/upload-pdf`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return res.data;
   },
 };

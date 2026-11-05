@@ -7,3 +7,4 @@ public record ConflitoBloqueanteDto(
         String valorB,
         String mensagemFormatada
 ) {}
+

@@ -466,6 +466,14 @@ export interface ClassificacaoTecnica {
   unidadeSugerida: string;
 }
 
+export interface UploadPdfTreinamentoResponse {
+  totalArquivosProcessados: number;
+  totalItensExtraidos: number;
+  totalNovosEnfileirados: number;
+  arquivos: string[];
+  mensagem: string;
+}
+
 export interface EstatisticasTreinamento {
   totalPendentes: number;
   totalValidados: number;

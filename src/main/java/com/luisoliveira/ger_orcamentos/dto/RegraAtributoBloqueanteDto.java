@@ -9,3 +9,4 @@ public record RegraAtributoBloqueanteDto(
         List<String> exemplosValores,
         String impactoBloqueio
 ) {}
+

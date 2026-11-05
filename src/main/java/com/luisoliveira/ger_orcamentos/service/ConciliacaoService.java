@@ -9,6 +9,7 @@ import com.luisoliveira.ger_orcamentos.repositories.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -51,6 +52,9 @@ public class ConciliacaoService {
 
     @Autowired(required = false)
     private GeminiClient geminiClient;
+
+    @Autowired(required = false)
+    private AiExtratorService aiExtratorService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -691,6 +695,47 @@ public class ConciliacaoService {
             novosEnfileirados++;
         }
         return novosEnfileirados;
+    }
+
+    @Transactional
+    public UploadPdfTreinamentoResponseDto processarUploadPdfsTreinamento(
+            List<MultipartFile> files, String fornecedorManual, String documentoManual, String tipoFonte) {
+        if (files == null || files.isEmpty()) {
+            return new UploadPdfTreinamentoResponseDto(0, 0, 0, List.of(), "Nenhum arquivo enviado.");
+        }
+
+        int totalItensExtraidos = 0;
+        int totalNovosEnfileirados = 0;
+        List<String> nomesArquivos = new ArrayList<>();
+
+        for (MultipartFile file : files) {
+            if (file == null || file.isEmpty()) continue;
+            nomesArquivos.add(file.getOriginalFilename());
+
+            try {
+                if (aiExtratorService != null) {
+                    QuadroConcorrenciaDto extraido = aiExtratorService.extrairDados(file);
+                    if (extraido != null && extraido.getItens() != null && !extraido.getItens().isEmpty()) {
+                        totalItensExtraidos += extraido.getItens().size();
+
+                        String fornecedor = (fornecedorManual != null && !fornecedorManual.isBlank())
+                                ? fornecedorManual : extraido.getNomeFornecedor();
+                        String documento = (documentoManual != null && !documentoManual.isBlank())
+                                ? documentoManual : (extraido.getNumeroOrcamento() != null ? extraido.getNumeroOrcamento() : file.getOriginalFilename());
+
+                        int enfileirados = enfileirarItensLote(extraido.getItens(), fornecedor, documento, tipoFonte);
+                        totalNovosEnfileirados += enfileirados;
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Erro ao processar PDF para treinamento (" + file.getOriginalFilename() + "): " + e.getMessage());
+            }
+        }
+
+        String msg = String.format("Processados %d arquivo(s) PDF com sucesso! %d produtos/itens extraídos pela IA, sendo %d novos adicionados à Fila de Treinamento.",
+                nomesArquivos.size(), totalItensExtraidos, totalNovosEnfileirados);
+
+        return new UploadPdfTreinamentoResponseDto(nomesArquivos.size(), totalItensExtraidos, totalNovosEnfileirados, nomesArquivos, msg);
     }
 
     public ItemTreinamentoDto obterProximoItemParaTreinar() {

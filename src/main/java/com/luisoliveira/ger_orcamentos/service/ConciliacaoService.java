@@ -44,6 +44,9 @@ public class ConciliacaoService {
     private ClassificadorTecnicoService classificadorTecnicoService;
 
     @Autowired
+    private MotorEvidenciasService motorEvidenciasService;
+
+    @Autowired
     private AuditoriaService auditoriaService;
 
     @Autowired(required = false)
@@ -163,103 +166,76 @@ public class ConciliacaoService {
     }
 
     // ==========================================
-    // 3. PIPELINE DE CONCILIAÇÃO MULTICAMADAS
+    // 3. MOTOR DE CONCILIAÇÃO POR EVIDÊNCIAS
     // ==========================================
 
-    /**
-     * Tenta conciliar um item de orçamento com os materiais mestre em 3 tiers.
-     */
     public SugestaoConciliacaoDto resolverConciliacao(String descricaoOriginal, String unidadeOriginal,
                                                      BigDecimal quantidadeOriginal, BigDecimal precoUnitarioOriginal,
                                                      Long fornecedorId, String fornecedorNome,
                                                      List<ItemCanonico> cacheMateriais) {
+        return resolverConciliacaoCompleta(
+                descricaoOriginal, unidadeOriginal, quantidadeOriginal, precoUnitarioOriginal,
+                fornecedorId, fornecedorNome, cacheMateriais, false, false, null
+        );
+    }
+
+    public SugestaoConciliacaoDto resolverConciliacaoCompleta(String descricaoOriginal, String unidadeOriginal,
+                                                             BigDecimal quantidadeOriginal, BigDecimal precoUnitarioOriginal,
+                                                             Long fornecedorId, String fornecedorNome,
+                                                             List<ItemCanonico> cacheMateriais,
+                                                             boolean quantidadeUnicaNoOrcamento,
+                                                             boolean geradoPorCotacaoSistema,
+                                                             Integer itemSeqCotacao) {
         if (descricaoOriginal == null || descricaoOriginal.isBlank()) {
             return null;
         }
 
-        String norm = normalizarTexto(descricaoOriginal);
         String uOrig = normalizarUnidade(unidadeOriginal);
-
-        // --- TIER 1: Dicionário De-Para Conhecido (100% Confiança) ---
-        List<ItemAlias> aliases = itemAliasRepository.buscarMelhorMatchAlias(norm, fornecedorId);
-        if (!aliases.isEmpty()) {
-            ItemAlias alias = aliases.get(0);
-            ItemCanonico canonico = alias.getItemCanonico();
-            if (canonico != null && canonico.isAtivo()) {
-                BigDecimal fator = obterFatorConversao(canonico.getId(), uOrig, canonico.getUnidadePadrao());
-                BigDecimal qtdConvertida = (quantidadeOriginal != null) ? quantidadeOriginal.multiply(fator) : null;
-                BigDecimal precoConvertido = (precoUnitarioOriginal != null && fator.compareTo(BigDecimal.ZERO) > 0)
-                        ? precoUnitarioOriginal.divide(fator, 4, RoundingMode.HALF_UP)
-                        : precoUnitarioOriginal;
-
-                return new SugestaoConciliacaoDto(
-                        descricaoOriginal, fornecedorNome, fornecedorId,
-                        canonico.getId(), canonico.getDescricaoPadrao(),
-                        100, "Encontrado no dicionário De-Para permanente.",
-                        "TIER1_ALIAS", uOrig, canonico.getUnidadePadrao(),
-                        fator, quantidadeOriginal, qtdConvertida, precoUnitarioOriginal, precoConvertido
-                );
-            }
-        }
-
-        // --- TIER 2: Similaridade Sintática e Numérica Local ---
         List<ItemCanonico> materiais = (cacheMateriais != null) ? cacheMateriais : itemCanonicoRepository.findByAtivoTrueOrderByDescricaoPadraoAsc();
-        ItemCanonico melhorMatchSintatico = null;
-        int melhorScore = 0;
-        String justificativaSintatica = "";
 
-        List<String> numerosA = extrairTokensNumericos(norm);
+        ResultadoAvaliacaoEvidenciasDto melhorAvaliacao = null;
+        ItemCanonico melhorCanonico = null;
+        int maiorConfianca = 0;
 
         for (ItemCanonico mat : materiais) {
-            String normMat = mat.getDescricaoNormalizada();
+            BigDecimal fator = obterFatorConversao(mat.getId(), uOrig, mat.getUnidadePadrao());
+            ResultadoAvaliacaoEvidenciasDto aval = motorEvidenciasService.avaliarEvidencias(
+                    descricaoOriginal, unidadeOriginal, quantidadeOriginal,
+                    fornecedorId, fornecedorNome, mat, fator,
+                    quantidadeUnicaNoOrcamento, geradoPorCotacaoSistema, itemSeqCotacao
+            );
 
-            // REGRA: Mesma finalidade/aplicação não significa mesmo produto!
-            // Conflito de especificações (ex: Ponta Azul vs Convencional, Reforçado vs Leve) bloqueia associação automática
-            String conflito = classificadorTecnicoService.detectarConflitoEspecificacao(norm, normMat);
-            if (conflito != null) {
-                continue;
-            }
-
-            if (norm.equals(normMat)) {
-                melhorMatchSintatico = mat;
-                melhorScore = 98;
-                justificativaSintatica = "Texto normalizado idêntico ao material cadastrado.";
-                break;
-            }
-
-            List<String> numerosB = extrairTokensNumericos(normMat);
-            if (!numerosA.isEmpty() && !numerosB.isEmpty()) {
-                boolean temNumeroComum = numerosA.stream().anyMatch(numerosB::contains);
-                if (!temNumeroComum) {
-                    continue; // Medidas numéricas diferentes -> produtos distintos
-                }
-            }
-
-            int score = calcularScoreSobreposicao(norm, normMat);
-            if (score > melhorScore && score >= 75) {
-                melhorScore = score;
-                melhorMatchSintatico = mat;
-                justificativaSintatica = "Forte sobreposição técnica (" + score + "% de similaridade) e medidas compatíveis.";
+            if (aval.confianca() > maiorConfianca) {
+                maiorConfianca = aval.confianca();
+                melhorAvaliacao = aval;
+                melhorCanonico = mat;
             }
         }
 
-        if (melhorMatchSintatico != null && melhorScore >= 80) {
-            BigDecimal fator = obterFatorConversao(melhorMatchSintatico.getId(), uOrig, melhorMatchSintatico.getUnidadePadrao());
+        if (melhorCanonico != null && maiorConfianca >= 50) {
+            BigDecimal fator = obterFatorConversao(melhorCanonico.getId(), uOrig, melhorCanonico.getUnidadePadrao());
             BigDecimal qtdConvertida = (quantidadeOriginal != null) ? quantidadeOriginal.multiply(fator) : null;
             BigDecimal precoConvertido = (precoUnitarioOriginal != null && fator.compareTo(BigDecimal.ZERO) > 0)
                     ? precoUnitarioOriginal.divide(fator, 4, RoundingMode.HALF_UP)
                     : precoUnitarioOriginal;
 
+            String justificativa = (melhorAvaliacao != null && !melhorAvaliacao.motivos().isEmpty())
+                    ? String.join(" • ", melhorAvaliacao.motivos())
+                    : "Similaridade semântica por evidências combinadas (" + maiorConfianca + "%).";
+
             return new SugestaoConciliacaoDto(
                     descricaoOriginal, fornecedorNome, fornecedorId,
-                    melhorMatchSintatico.getId(), melhorMatchSintatico.getDescricaoPadrao(),
-                    melhorScore, justificativaSintatica,
-                    "TIER2_SINTATICO", uOrig, melhorMatchSintatico.getUnidadePadrao(),
-                    fator, quantidadeOriginal, qtdConvertida, precoUnitarioOriginal, precoConvertido
+                    melhorCanonico.getId(), melhorCanonico.getDescricaoPadrao(),
+                    maiorConfianca, justificativa,
+                    "MOTOR_EVIDENCIAS", uOrig, melhorCanonico.getUnidadePadrao(),
+                    fator, quantidadeOriginal, qtdConvertida, precoUnitarioOriginal, precoConvertido,
+                    melhorAvaliacao != null ? melhorAvaliacao.alertaConflito() : null,
+                    melhorAvaliacao != null ? melhorAvaliacao.motivos() : List.of(),
+                    melhorAvaliacao != null ? melhorAvaliacao.evidencias() : List.of()
             );
         }
 
-        return null; // Item sem match direto conhecido
+        return null; // Sem correspondência com evidências suficientes
     }
 
     private List<String> extrairTokensNumericos(String texto) {
@@ -298,17 +274,32 @@ public class ConciliacaoService {
 
         List<ItemCanonico> materiaisAtivos = itemCanonicoRepository.findByAtivoTrueOrderByDescricaoPadraoAsc();
 
-        // 1. Resolve cada item de cada orçamento pelo pipeline
+        // Pré-computa frequências de quantidades por orçamento para detectar "quantidades únicas" (fingerprint de lista)
+        Map<String, Map<BigDecimal, Long>> frequenciasQtdPorOrc = new HashMap<>();
+        for (QuadroConcorrenciaDto orc : orcs) {
+            if (orc.getItens() == null) continue;
+            Map<BigDecimal, Long> freq = orc.getItens().stream()
+                    .filter(it -> it.quantidade() != null)
+                    .collect(Collectors.groupingBy(ItemQuadroDTO::quantidade, Collectors.counting()));
+            frequenciasQtdPorOrc.put(orc.getNomeFornecedor(), freq);
+        }
+
+        // 1. Resolve cada item de cada orçamento pelo Motor de Evidências
         Map<String, SugestaoConciliacaoDto> sugestoesPorDescricao = new HashMap<>();
         List<SugestaoConciliacaoDto> todasSugestoes = new ArrayList<>();
 
         for (QuadroConcorrenciaDto orc : orcs) {
             if (orc.getItens() == null) continue;
+            Map<BigDecimal, Long> freq = frequenciasQtdPorOrc.getOrDefault(orc.getNomeFornecedor(), Map.of());
+
             for (ItemQuadroDTO it : orc.getItens()) {
                 if (it.descricao() == null) continue;
-                SugestaoConciliacaoDto sug = resolverConciliacao(
+                boolean qtdUnica = it.quantidade() != null && freq.getOrDefault(it.quantidade(), 0L) == 1L;
+
+                SugestaoConciliacaoDto sug = resolverConciliacaoCompleta(
                         it.descricao(), it.unidadeMedida(), it.quantidade(), it.valorUnitario(),
-                        null, orc.getNomeFornecedor(), materiaisAtivos
+                        null, orc.getNomeFornecedor(), materiaisAtivos,
+                        qtdUnica, false, null
                 );
                 if (sug != null) {
                     sugestoesPorDescricao.put(normalizarTexto(it.descricao()), sug);
@@ -343,21 +334,68 @@ public class ConciliacaoService {
             mensagem = String.format("Atenção: O maior orçamento possui %d itens, mas o quadro gerou %d linhas (%d linhas a mais). Foram detectadas possíveis duplicidades de itens com descrições divergentes.",
                     maiorLinhas, totalLinhasQc, diferenca);
 
-            // Identifica itens com apenas 1 fornecedor (linhas 'órfãs') para revisão
+            // Identifica itens com apenas 1 fornecedor (linhas 'órfãs') para revisão e calcula evidências cruzadas
             for (QuadroConcorrenciaDto orc : orcs) {
                 if (orc.getItens() == null) continue;
+                Map<BigDecimal, Long> freq = frequenciasQtdPorOrc.getOrDefault(orc.getNomeFornecedor(), Map.of());
+
                 for (ItemQuadroDTO it : orc.getItens()) {
                     String norm = normalizarTexto(it.descricao());
                     SugestaoConciliacaoDto sug = sugestoesPorDescricao.get(norm);
-                    if (sug == null || sug.confianca() < 95) {
+
+                    if (sug == null || sug.confianca() < 90) {
                         List<String> faltantes = orcs.stream()
                                 .map(QuadroConcorrenciaDto::getNomeFornecedor)
                                 .filter(f -> !Objects.equals(f, orc.getNomeFornecedor()))
                                 .collect(Collectors.toList());
 
+                        List<SugestaoConciliacaoDto> sugestoesEquivalentes = new ArrayList<>();
+                        if (sug != null) {
+                            sugestoesEquivalentes.add(sug);
+                        }
+
+                        // Busca item correspondente em outro fornecedor com evidências cruzadas (ex: 157m idêntico)
+                        boolean qtdAUnica = it.quantidade() != null && freq.getOrDefault(it.quantidade(), 0L) == 1L;
+
+                        for (QuadroConcorrenciaDto outroOrc : orcs) {
+                            if (Objects.equals(outroOrc.getNomeFornecedor(), orc.getNomeFornecedor()) || outroOrc.getItens() == null) continue;
+                            Map<BigDecimal, Long> outroFreq = frequenciasQtdPorOrc.getOrDefault(outroOrc.getNomeFornecedor(), Map.of());
+
+                            for (ItemQuadroDTO outroIt : outroOrc.getItens()) {
+                                if (outroIt.descricao() == null) continue;
+                                boolean qtdBUnica = outroIt.quantidade() != null && outroFreq.getOrDefault(outroIt.quantidade(), 0L) == 1L;
+
+                                ResultadoAvaliacaoEvidenciasDto crossEvidencias = motorEvidenciasService.avaliarEvidenciasEntreItens(
+                                        it.descricao(), it.unidadeMedida(), it.quantidade(), orc.getNomeFornecedor(), qtdAUnica,
+                                        outroIt.descricao(), outroIt.unidadeMedida(), outroIt.quantidade(), outroOrc.getNomeFornecedor(), qtdBUnica,
+                                        null, BigDecimal.ONE
+                                );
+
+                                if (crossEvidencias.confianca() >= 45) {
+                                    String justificativa = !crossEvidencias.motivos().isEmpty()
+                                            ? String.join(" • ", crossEvidencias.motivos())
+                                            : "Correspondência cruzada por evidências (" + crossEvidencias.confianca() + "%).";
+
+                                    sugestoesEquivalentes.add(new SugestaoConciliacaoDto(
+                                            it.descricao(), outroOrc.getNomeFornecedor(), null,
+                                            null, outroIt.descricao(),
+                                            crossEvidencias.confianca(), justificativa,
+                                            "CROSS_ORCAMENTO", it.unidadeMedida(), outroIt.unidadeMedida(),
+                                            BigDecimal.ONE, it.quantidade(), outroIt.quantidade(),
+                                            it.valorUnitario(), outroIt.valorUnitario(),
+                                            crossEvidencias.alertaConflito(),
+                                            crossEvidencias.motivos(),
+                                            crossEvidencias.evidencias()
+                                    ));
+                                }
+                            }
+                        }
+
+                        sugestoesEquivalentes.sort(Comparator.comparingInt(SugestaoConciliacaoDto::confianca).reversed());
+
                         discrepancias.add(new DiscrepanciaItemDto(
                                 it.descricao(), orc.getNomeFornecedor(), faltantes,
-                                (sug != null) ? List.of(sug) : List.of()
+                                sugestoesEquivalentes
                         ));
                     }
                 }
@@ -692,46 +730,25 @@ public class ConciliacaoService {
 
     private List<SugestaoItemTreinamentoDto> gerarTopSugestoes(String normItem, List<ItemCanonico> materiais) {
         List<SugestaoItemTreinamentoDto> lista = new ArrayList<>();
-        List<String> numsA = extrairTokensNumericos(normItem);
 
         for (ItemCanonico mat : materiais) {
-            String normMat = mat.getDescricaoNormalizada();
-            int score = 0;
-            String justificativa;
-            String avisoDivergencia = null;
+            ResultadoAvaliacaoEvidenciasDto aval = motorEvidenciasService.avaliarEvidencias(
+                    normItem, mat.getUnidadePadrao(), null,
+                    null, null, mat, BigDecimal.ONE,
+                    false, false, null
+            );
 
-            // REGRA: Checa divergências específicas (ex: Ponta Azul vs Convencional, Reforçado vs Leve, Cores distintas)
-            String conflito = classificadorTecnicoService.detectarConflitoEspecificacao(normItem, normMat);
-
-            if (normItem.equals(normMat)) {
-                score = 98;
-                justificativa = "Texto exato pós-normalização.";
-            } else {
-                List<String> numsB = extrairTokensNumericos(normMat);
-                if (!numsA.isEmpty() && !numsB.isEmpty()) {
-                    boolean temNum = numsA.stream().anyMatch(numsB::contains);
-                    if (!temNum) {
-                        continue; // números técnicos incompatíveis não são sugeridos
-                    }
-                }
-                score = calcularScoreSobreposicao(normItem, normMat);
-                justificativa = "Similaridade de termos técnicos (" + score + "%).";
-            }
-
-            if (conflito != null) {
-                // Penaliza o score fortemente para no máximo 45% e emite aviso explícito
-                score = Math.min(score, 45);
-                avisoDivergencia = conflito;
-                justificativa = conflito;
-            }
-
-            if (score >= 35 || avisoDivergencia != null) {
+            if (aval.confianca() >= 35 || aval.alertaConflito() != null) {
                 List<String> appsList = (mat.getAplicacoes() != null && !mat.getAplicacoes().isBlank())
                         ? Arrays.stream(mat.getAplicacoes().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
                         : List.of();
                 List<String> caracList = (mat.getCaracteristicas() != null && !mat.getCaracteristicas().isBlank())
                         ? Arrays.stream(mat.getCaracteristicas().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
                         : List.of();
+
+                String justificativa = !aval.motivos().isEmpty()
+                        ? String.join(" • ", aval.motivos())
+                        : "Similaridade de especificações (" + aval.confianca() + "%).";
 
                 lista.add(new SugestaoItemTreinamentoDto(
                         mat.getId(),
@@ -741,9 +758,11 @@ public class ConciliacaoService {
                         mat.getSubcategoria(),
                         appsList,
                         caracList,
-                        score,
+                        aval.confianca(),
                         justificativa,
-                        avisoDivergencia
+                        aval.alertaConflito(),
+                        aval.motivos(),
+                        aval.evidencias()
                 ));
             }
         }

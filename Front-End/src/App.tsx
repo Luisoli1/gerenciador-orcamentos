@@ -61,6 +61,10 @@ function MainApp() {
   }, [user]);
 
   useEffect(() => {
+    document.title = "Makinsthal - Sistema de Gestão de Orçamentos, QCs & Faturamento Direto";
+  }, []);
+
+  useEffect(() => {
     if (user) {
       carregarObras();
     }
@@ -122,7 +126,7 @@ function MainApp() {
             <Building2 className="w-5 h-5 text-amber-500" />
             <div>
               <h2 className="text-sm font-semibold text-slate-200">
-                Makinsthal Engenharia • Gestão de Compras & Orçamentos
+                Makinsthal Engenharia • Sistema de Gestão de Orçamentos, QCs & Faturamento Direto
               </h2>
               <p className="text-xs text-slate-400">
                 {user ? `Conectado como ${user.nome} (${user.role === 'DONO' ? 'Dono' : 'Operador'})` : ''}

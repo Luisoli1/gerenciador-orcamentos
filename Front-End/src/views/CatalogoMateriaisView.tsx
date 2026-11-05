@@ -745,6 +745,24 @@ export function CatalogoMateriaisView() {
                             {sug.justificativa}
                           </span>
 
+                          {/* MOTIVOS E EVIDÊNCIAS MULTIFATORIAIS */}
+                          {sug.motivos && sug.motivos.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {sug.motivos.map((motivo, mIdx) => (
+                                <span 
+                                  key={mIdx}
+                                  className={`text-[10px] px-2 py-0.5 rounded-md font-medium border flex items-center gap-1 ${
+                                    motivo.startsWith('⚠️')
+                                      ? 'bg-rose-500/10 text-rose-300 border-rose-500/20'
+                                      : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                                  }`}
+                                >
+                                  {motivo}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
                           {/* ALERTA DE DIVERGÊNCIA TÉCNICA */}
                           {sug.avisoDivergenciaTecnica && (
                             <div className="p-2 bg-amber-500/15 border border-amber-500/30 rounded-lg text-xs text-amber-300 flex items-start gap-1.5 mt-1">

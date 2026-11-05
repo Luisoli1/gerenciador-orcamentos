@@ -344,6 +344,14 @@ export interface ItemAlias {
   dataAtualizacao?: string;
 }
 
+export interface EvidenciaSinal {
+  tipo: string;
+  titulo: string;
+  detalhe: string;
+  peso: number;
+  favoravel: boolean;
+}
+
 export interface SugestaoConciliacao {
   itemDescricaoOriginal: string;
   fornecedorNome: string;
@@ -361,6 +369,8 @@ export interface SugestaoConciliacao {
   precoUnitarioOriginal?: number;
   precoUnitarioConvertido?: number;
   alertaEspecificacao?: string;
+  motivos?: string[];
+  evidencias?: EvidenciaSinal[];
 }
 
 export interface DiscrepanciaItem {
@@ -402,6 +412,8 @@ export interface SugestaoItemTreinamento {
   confianca: number;
   justificativa: string;
   avisoDivergenciaTecnica?: string;
+  motivos?: string[];
+  evidencias?: EvidenciaSinal[];
 }
 
 export interface ItemTreinamento {

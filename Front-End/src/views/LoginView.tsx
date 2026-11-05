@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Lock, Mail, ShieldCheck, Eye, EyeOff, AlertCircle, HardHat } from 'lucide-react';
 
@@ -9,6 +9,10 @@ export const LoginView: React.FC = () => {
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    document.title = "Makinsthal - Sistema de Gestão de Orçamentos, QCs & Faturamento Direto";
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -11,3 +11,4 @@ public record ClassificacaoTecnicaDto(
         String codigoFabricante,
         String unidadeSugerida
 ) {}
+

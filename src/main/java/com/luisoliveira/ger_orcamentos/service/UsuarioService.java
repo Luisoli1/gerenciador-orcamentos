@@ -32,12 +32,12 @@ public class UsuarioService {
             Usuario dono = new Usuario();
             dono.setNome("Administrador Dono");
             dono.setEmail("admin@makinsthal.com.br");
-            dono.setSenha(passwordEncoder.encode("admin123"));
+            dono.setSenha(passwordEncoder.encode("Makinsthal@2026!"));
             dono.setRole(Role.DONO);
             dono.setAtivo(true);
             usuarioRepository.save(dono);
             System.out.println("===========================================================");
-            System.out.println("USUÁRIO DONO INICIAL CRIADO: admin@makinsthal.com.br / admin123");
+            System.out.println("USUÁRIO DONO INICIAL CRIADO: admin@makinsthal.com.br / Makinsthal@2026!");
             System.out.println("===========================================================");
         }
     }

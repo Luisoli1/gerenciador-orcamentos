@@ -428,7 +428,9 @@ export const api = {
     files: File[], 
     tipoFonte: string = 'ORCAMENTO_HISTORICO', 
     fornecedor?: string, 
-    documento?: string
+    documento?: string,
+    signal?: AbortSignal,
+    onUploadProgress?: (progressEvent: any) => void
   ): Promise<UploadPdfTreinamentoResponse> => {
     const formData = new FormData();
     files.forEach((f) => formData.append('files', f));
@@ -438,6 +440,9 @@ export const api = {
 
     const res = await axios.post(`${API_BASE_URL}/conciliacao/treinamento/upload-pdf`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      signal,
+      onUploadProgress,
+      timeout: 300000 // 5 minutos de tolerância máxima para catálogos muito densos
     });
     return res.data;
   },

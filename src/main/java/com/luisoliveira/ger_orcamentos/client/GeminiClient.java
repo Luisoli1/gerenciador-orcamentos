@@ -131,4 +131,55 @@ public class GeminiClient {
                 .call()
                 .content();
     }
+
+    public String enviarPromptTexto(String textoExtraido, String nomeArquivo) {
+        String prompt = "És um assistente especializado em extração de dados de cotações comerciais e catálogos técnicos de materiais de construção civil.\n" +
+                "\n" +
+                "Analise cuidadosamente TODO o texto abaixo extraído do arquivo '" + (nomeArquivo != null ? nomeArquivo : "documento.pdf") + "' e extraia todos os produtos/materiais, descrições técnicas, unidades e dados do documento.\n" +
+                "\n" +
+                "REGRAS GERAIS:\n" +
+                "- Não invente informações que não estejam presentes no texto.\n" +
+                "- Não deduza a marca do produto pelo nome do fornecedor.\n" +
+                "- Se um campo não estiver visível ou seguro, retorne null.\n" +
+                "- Preserve os valores monetários exatamente como apresentados no texto (se houver).\n" +
+                "- Mantenha e aplique a correta ortografia e acentuação da língua portuguesa nas descrições dos materiais e produtos (por exemplo: 'Abraçadeira' e não 'Abracadeira', 'Vergalhão' e não 'Vergalhao', 'Aço' e não 'Aco'), preservando rigorosamente todas as medidas, polegadas, bitolas, códigos e números técnicos.\n" +
+                "- Retorne APENAS um JSON válido, sem Markdown ou explicações.\n" +
+                "\n" +
+                "ESTRUTURA OBRIGATÓRIA DO JSON:\n" +
+                "\n" +
+                "{\n" +
+                "  \"nomeFornecedor\": \"String\",\n" +
+                "  \"cnpjFornecedor\": \"String\",\n" +
+                "  \"nomeContato\": \"String\",\n" +
+                "  \"telefoneContato\": \"String\",\n" +
+                "  \"celularContato\": \"String\",\n" +
+                "  \"emailContato\": \"String\",\n" +
+                "  \"numeroOrcamento\": \"String\",\n" +
+                "  \"localCidade\": \"String\",\n" +
+                "  \"dataEmissao\": \"String yyyy-MM-dd\",\n" +
+                "  \"dataValidade\": \"String yyyy-MM-dd\",\n" +
+                "  \"valorTotalMercadoria\": \"BigDecimal\",\n" +
+                "  \"valorTotalIpi\": \"BigDecimal\",\n" +
+                "  \"valorTotalGeral\": \"BigDecimal\",\n" +
+                "  \"itens\": [\n" +
+                "    {\n" +
+                "      \"marca\": \"String\",\n" +
+                "      \"descricao\": \"String\",\n" +
+                "      \"unidadeMedida\": \"String\",\n" +
+                "      \"quantidade\": \"BigDecimal\",\n" +
+                "      \"valorUnitario\": \"BigDecimal\",\n" +
+                "      \"valorTotal\": \"BigDecimal\",\n" +
+                "      \"aliquotaIpi\": \"BigDecimal\"\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}\n" +
+                "\n" +
+                "TEXTO DO DOCUMENTO:\n" +
+                textoExtraido;
+
+        return chatClient.prompt()
+                .user(prompt)
+                .call()
+                .content();
+    }
 }

@@ -1,4 +1,3 @@
-
 package com.luisoliveira.ger_orcamentos.service;
 
 import tools.jackson.databind.json.JsonMapper;
@@ -28,15 +27,39 @@ public class AiExtratorService {
     }
 
     public QuadroConcorrenciaDto extrairDados(MultipartFile file)  {
-        System.out.println("--> A iniciar a extração de texto do PDF...");
+        String nomeArquivo = file.getOriginalFilename();
+        long tamanhoKb = file.getSize() / 1024;
+        System.out.println("--> A iniciar extração de dados do PDF: " + nomeArquivo + " (" + tamanhoKb + " KB)...");
 
-        String jsonTexto;
+        String jsonTexto = null;
+        String textoExtraido = null;
+
+        // 1. Tenta extrair texto com Apache PDFBox (muito mais rápido, consome quase zero memória e suporta catálogos enormes)
         try {
-            jsonTexto = geminiClient.enviarPrompt(file);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+            textoExtraido = pdfExtractorService.extrairTexto(file);
+        } catch (Exception ex) {
+            System.out.println("Aviso: Falha ao extrair texto bruto via PDFBox: " + ex.getMessage());
         }
 
+        // Se o documento tiver camada de texto consistente (> 100 caracteres)
+        if (textoExtraido != null && textoExtraido.trim().length() > 100) {
+            System.out.println("--> Camada de texto detectada (" + textoExtraido.trim().length() + " caracteres). Enviando texto ao Gemini...");
+            if (textoExtraido.length() > 300000) {
+                textoExtraido = textoExtraido.substring(0, 300000);
+            }
+            jsonTexto = geminiClient.enviarPromptTexto(textoExtraido, nomeArquivo);
+        } else {
+            // Documento escaneado / sem texto selecionável
+            if (file.getSize() > 19 * 1024 * 1024) {
+                throw new RuntimeException("O arquivo '" + nomeArquivo + "' possui mais de 19MB e não contém texto selecionável (apenas imagens escaneadas). Comprima o arquivo ou use uma versão com texto pesquisável.");
+            }
+            System.out.println("--> PDF escaneado ou sem texto selecionável. Enviando arquivo binário para visão multimodal do Gemini...");
+            try {
+                jsonTexto = geminiClient.enviarPrompt(file);
+            } catch (IOException e) {
+                throw new RuntimeException("Erro ao enviar PDF binário para IA: " + e.getMessage(), e);
+            }
+        }
 
         System.out.println("--> Resposta recebida do Gemini com sucesso!");
 

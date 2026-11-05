@@ -98,8 +98,9 @@ export function CatalogoMateriaisView() {
   const [modalLoteAberto, setModalLoteAberto] = useState(false);
   const [modoImportacao, setModoImportacao] = useState<'pdf' | 'manual'>('pdf');
   const [arquivosPdf, setArquivosPdf] = useState<File[]>([]);
-  const [progressoPdf, setProgressoPdf] = useState<{ atual: number; total: number; nomeAtual: string } | null>(null);
+  const [progressoPdf, setProgressoPdf] = useState<{ atual: number; total: number; nomeAtual: string; statusEtapa?: string } | null>(null);
   const cancelarEnvioRef = React.useRef(false);
+  const abortControllerRef = React.useRef<AbortController | null>(null);
   const [loteTexto, setLoteTexto] = useState('');
   const [loteFornecedor, setLoteFornecedor] = useState('');
   const [loteDocumento, setLoteDocumento] = useState('');
@@ -334,25 +335,46 @@ export function CatalogoMateriaisView() {
         }
 
         const file = arquivosPdf[i];
+        abortControllerRef.current = new AbortController();
+
         setProgressoPdf({
           atual: i + 1,
           total: arquivosPdf.length,
-          nomeAtual: file.name
+          nomeAtual: file.name,
+          statusEtapa: `Iniciando envio de ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)...`
         });
 
         try {
-          // Envia um arquivo por vez: evita estouro de timeout do Vercel/Render e economiza memória
+          // Envia um arquivo por vez: com AbortController e acompanhamento de upload em tempo real
           const resp = await api.uploadPdfsTreinamento(
             [file],
             loteTipoFonte,
             loteFornecedor.trim() || undefined,
-            loteDocumento.trim() || undefined
+            loteDocumento.trim() || undefined,
+            abortControllerRef.current.signal,
+            (progressEvent) => {
+              if (progressEvent.total) {
+                const pct = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                const mbLoaded = (progressEvent.loaded / (1024 * 1024)).toFixed(1);
+                const mbTotal = (progressEvent.total / (1024 * 1024)).toFixed(1);
+                setProgressoPdf(prev => prev ? {
+                  ...prev,
+                  statusEtapa: pct < 100 
+                    ? `Enviando arquivo: ${mbLoaded} MB de ${mbTotal} MB (${pct}%)...`
+                    : 'Arquivo recebido na nuvem! IA Gemini analisando produtos e tabelas...'
+                } : null);
+              }
+            }
           );
 
           totalProcessados += (resp.totalArquivosProcessados || 1);
           totalItens += (resp.totalItensExtraidos || 0);
           totalNovos += (resp.totalNovosEnfileirados || 0);
         } catch (itemErr: any) {
+          if (cancelarEnvioRef.current || itemErr?.name === 'CanceledError' || itemErr?.code === 'ERR_CANCELED') {
+            errosOcorridos.push(`${file.name}: Interrompido pelo usuário.`);
+            break;
+          }
           console.error(`Erro ao processar ${file.name}:`, itemErr);
           const msgErro = itemErr?.response?.data?.message || itemErr?.message || 'Falha de comunicação/timeout';
           errosOcorridos.push(`${file.name}: ${msgErro}`);
@@ -1765,6 +1787,13 @@ export function CatalogoMateriaisView() {
                     📄 {progressoPdf.nomeAtual}
                   </p>
 
+                  {progressoPdf.statusEtapa && (
+                    <div className="flex items-center gap-2 text-xs text-amber-300 font-medium bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg">
+                      <RefreshCw className="w-3 h-3 animate-spin shrink-0 text-amber-400" />
+                      <span className="truncate">{progressoPdf.statusEtapa}</span>
+                    </div>
+                  )}
+
                   <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
                     <div
                       className="bg-gradient-to-r from-amber-500 to-emerald-500 h-full rounded-full transition-all duration-300"
@@ -1776,8 +1805,13 @@ export function CatalogoMateriaisView() {
                     <span>Processando individualmente na nuvem com resiliência.</span>
                     <button
                       type="button"
-                      onClick={() => { cancelarEnvioRef.current = true; }}
-                      className="text-rose-400 hover:text-rose-300 font-semibold hover:underline"
+                      onClick={() => {
+                        cancelarEnvioRef.current = true;
+                        if (abortControllerRef.current) {
+                          abortControllerRef.current.abort();
+                        }
+                      }}
+                      className="text-rose-400 hover:text-rose-300 font-semibold hover:underline cursor-pointer"
                     >
                       Interromper
                     </button>

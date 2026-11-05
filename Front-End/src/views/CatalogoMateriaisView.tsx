@@ -74,6 +74,20 @@ export function CatalogoMateriaisView() {
   const [salvandoMaterial, setSalvandoMaterial] = useState(false);
   const [extraindoClassificacao, setExtraindoClassificacao] = useState(false);
 
+  // Estados de Edição de Material Mestre
+  const [modalEditarMaterial, setModalEditarMaterial] = useState(false);
+  const [materialEditandoId, setMaterialEditandoId] = useState<number | null>(null);
+  const [editDescricao, setEditDescricao] = useState('');
+  const [editUnidade, setEditUnidade] = useState('UN');
+  const [editCategoria, setEditCategoria] = useState('');
+  const [editSubcategoria, setEditSubcategoria] = useState('');
+  const [editAplicacoes, setEditAplicacoes] = useState('');
+  const [editCaracteristicas, setEditCaracteristicas] = useState('');
+  const [editCodigoNcm, setEditCodigoNcm] = useState('');
+  const [editCodigoRef, setEditCodigoRef] = useState('');
+  const [salvandoEdicaoMaterial, setSalvandoEdicaoMaterial] = useState(false);
+  const [extraindoClassificacaoEdit, setExtraindoClassificacaoEdit] = useState(false);
+
   // Estados de Conversões
   const [conversoes, setConversoes] = useState<ConversaoPadrao[]>([]);
 
@@ -348,6 +362,103 @@ export function CatalogoMateriaisView() {
       alert(err?.response?.data?.message || 'Erro ao criar material mestre.');
     } finally {
       setSalvandoMaterial(false);
+    }
+  };
+
+  // Abrir modal de edição de Material Mestre
+  const abrirModalEditarMaterial = (mat: ItemCanonico) => {
+    setMaterialEditandoId(mat.id);
+    setEditDescricao(mat.descricaoPadrao);
+    setEditUnidade(mat.unidadePadrao || 'UN');
+    setEditCategoria(mat.categoria || '');
+    setEditSubcategoria(mat.subcategoria || '');
+    setEditAplicacoes(mat.aplicacoes || '');
+    setEditCaracteristicas(mat.caracteristicas || '');
+    setEditCodigoNcm(mat.codigoNcm || '');
+    setEditCodigoRef(mat.codigoReferencia || '');
+    setModalEditarMaterial(true);
+  };
+
+  // Auto-classificar ao editar Material Mestre
+  const handleAutoClassificarEdit = async () => {
+    if (!editDescricao.trim()) return;
+    setExtraindoClassificacaoEdit(true);
+    try {
+      const info = await api.extrairClassificacaoTecnica(editDescricao.trim());
+      if (info.categoria) setEditCategoria(info.categoria);
+      if (info.subcategoria) setEditSubcategoria(info.subcategoria);
+      if (info.aplicacoes && info.aplicacoes.length > 0) setEditAplicacoes(info.aplicacoes.join(', '));
+      if (info.caracteristicas && info.caracteristicas.length > 0) setEditCaracteristicas(info.caracteristicas.join(', '));
+      if (info.unidadeSugerida) setEditUnidade(info.unidadeSugerida);
+    } catch (e) {
+      console.warn('Erro ao auto-classificar na edição:', e);
+    } finally {
+      setExtraindoClassificacaoEdit(false);
+    }
+  };
+
+  // Salvar alterações do Material Mestre
+  const handleSalvarEdicaoMaterial = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!materialEditandoId || !editDescricao.trim()) {
+      alert('A descrição do material mestre é obrigatória.');
+      return;
+    }
+
+    setSalvandoEdicaoMaterial(true);
+    try {
+      const atualizado = await api.atualizarMaterialMestre(materialEditandoId, {
+        descricaoPadrao: editDescricao.trim(),
+        unidadePadrao: editUnidade,
+        categoria: editCategoria.trim() || undefined,
+        subcategoria: editSubcategoria.trim() || undefined,
+        aplicacoes: editAplicacoes.trim() || undefined,
+        caracteristicas: editCaracteristicas.trim() || undefined,
+        codigoNcm: editCodigoNcm.trim() || undefined,
+        codigoReferencia: editCodigoRef.trim() || undefined
+      });
+
+      setMateriais(prev => prev.map(m => m.id === atualizado.id ? atualizado : m));
+      setSucesso(`Material Mestre #${atualizado.id} "${atualizado.descricaoPadrao}" atualizado com sucesso!`);
+      setModalEditarMaterial(false);
+      setTimeout(() => setSucesso(null), 5000);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Erro ao atualizar material mestre.');
+    } finally {
+      setSalvandoEdicaoMaterial(false);
+    }
+  };
+
+  // Deletar Material Mestre
+  const handleDeletarMaterial = async (mat: ItemCanonico) => {
+    const confirmacao = window.confirm(
+      `Deseja realmente excluir/inativar o Material Mestre:\n"${mat.descricaoPadrao}"?\n\nEle não será mais sugerido para conciliação.`
+    );
+    if (!confirmacao) return;
+
+    try {
+      await api.deletarMaterialMestre(mat.id);
+      setMateriais(prev => prev.filter(m => m.id !== mat.id));
+      setSucesso(`Material mestre "${mat.descricaoPadrao}" inativado com sucesso.`);
+      setTimeout(() => setSucesso(null), 4000);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Erro ao remover material mestre.');
+    }
+  };
+
+  // Reclassificar item da fila de treinamento com IA
+  const handleReclassificarTreino = async () => {
+    const texto = novoTreinoDescricao.trim() || itemTreinando?.descricaoBruta;
+    if (!texto) return;
+    try {
+      const info = await api.extrairClassificacaoTecnica(texto);
+      if (info.categoria) setNovoTreinoCategoria(info.categoria);
+      if (info.subcategoria) setNovoTreinoSubcategoria(info.subcategoria);
+      if (info.aplicacoes && info.aplicacoes.length > 0) setNovoTreinoAplicacoes(info.aplicacoes.join(', '));
+      if (info.caracteristicas && info.caracteristicas.length > 0) setNovoTreinoCaracteristicas(info.caracteristicas.join(', '));
+      if (info.unidadeSugerida) setNovoTreinoUnidade(info.unidadeSugerida);
+    } catch (e) {
+      console.warn('Erro ao reclassificar treino:', e);
     }
   };
 
@@ -997,7 +1108,12 @@ export function CatalogoMateriaisView() {
 
                   {/* OPÇÃO: CRIAR NOVO MATERIAL MESTRE */}
                   <div
-                    onClick={() => setOpcaoTreino('novo')}
+                    onClick={() => {
+                      setOpcaoTreino('novo');
+                      if (!novoTreinoDescricao.trim() && itemTreinando) {
+                        setNovoTreinoDescricao(itemTreinando.descricaoBruta);
+                      }
+                    }}
                     className={`p-4 rounded-2xl border cursor-pointer transition-all ${
                       opcaoTreino === 'novo'
                         ? 'bg-amber-500/10 border-amber-500 shadow-lg shadow-amber-500/5'
@@ -1037,9 +1153,36 @@ export function CatalogoMateriaisView() {
                       <div className="mt-4 pt-4 border-t border-slate-800 space-y-3">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           <div className="md:col-span-2">
-                            <label className="text-xs font-semibold text-slate-300 block mb-1">
-                              Descrição Padronizada do Novo Material:
-                            </label>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-semibold text-slate-300">
+                                Descrição Padronizada do Novo Material:
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (itemTreinando) setNovoTreinoDescricao(itemTreinando.descricaoBruta);
+                                  }}
+                                  className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold underline decoration-dotted"
+                                  title="Restaurar a descrição original do fornecedor"
+                                >
+                                  Usar texto do fornecedor
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleReclassificarTreino();
+                                  }}
+                                  className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold"
+                                  title="Auto-preencher categoria e características com IA"
+                                >
+                                  <Sparkles className="w-3 h-3" />
+                                  Auto-preencher campos com IA
+                                </button>
+                              </div>
+                            </div>
                             <input
                               type="text"
                               value={novoTreinoDescricao}
@@ -1475,12 +1618,13 @@ export function CatalogoMateriaisView() {
                     <th className="py-3.5 px-4">Categoria / Subcategoria</th>
                     <th className="py-3.5 px-4">Aplicações & Características</th>
                     <th className="py-3.5 px-4">Criado Em / Por</th>
+                    <th className="py-3.5 px-4 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
                   {materiais.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-slate-500">
+                      <td colSpan={7} className="py-12 text-center text-slate-500">
                         Nenhum material mestre cadastrado ainda. Crie um novo acima ou valide itens no Treinador!
                       </td>
                     </tr>
@@ -1531,6 +1675,24 @@ export function CatalogoMateriaisView() {
                           <div>{mat.criadoPor || 'Sistema'}</div>
                           <div className="text-[10px] text-slate-500">
                             {mat.dataCriacao ? new Date(mat.dataCriacao).toLocaleDateString('pt-BR') : '-'}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => abrirModalEditarMaterial(mat)}
+                              title="Editar material mestre (categoria, subcategoria, características, etc.)"
+                              className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-slate-700/80 rounded-lg transition"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeletarMaterial(mat)}
+                              title="Inativar/excluir material mestre"
+                              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-700/80 rounded-lg transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -2089,6 +2251,7 @@ export function CatalogoMateriaisView() {
                   required
                   value={cadDescricao}
                   onChange={(e) => setCadDescricao(e.target.value)}
+                  onBlur={handleAutoClassificar}
                   placeholder="Ex: CABO FLEXÍVEL 2,5MM² 750V AZUL"
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
                 />
@@ -2193,6 +2356,159 @@ export function CatalogoMateriaisView() {
                   className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-sm shadow-md transition"
                 >
                   {salvandoMaterial ? 'Cadastrando...' : 'Cadastrar Material'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR MATERIAL MESTRE */}
+      {modalEditarMaterial && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Editar Material Mestre #{materialEditandoId}</h3>
+                  <p className="text-xs text-slate-400">Ajuste padronizações, categorias, características e conversões.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setModalEditarMaterial(false)} 
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSalvarEdicaoMaterial} className="space-y-3.5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-300">Descrição Padronizada *</label>
+                  <button
+                    type="button"
+                    onClick={handleAutoClassificarEdit}
+                    disabled={extraindoClassificacaoEdit || !editDescricao.trim()}
+                    className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1 font-semibold disabled:opacity-40"
+                    title="Preenche categoria, subcategoria e características automaticamente com IA"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>{extraindoClassificacaoEdit ? 'Analisando...' : 'Auto-extrair com IA'}</span>
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={editDescricao}
+                  onChange={(e) => setEditDescricao(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Unidade Base *</label>
+                  <select
+                    value={editUnidade}
+                    onChange={(e) => setEditUnidade(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="M">M (Metro)</option>
+                    <option value="UN">UN (Unidade)</option>
+                    <option value="BARRA">BARRA (Barra)</option>
+                    <option value="PÇ">PÇ (Peça)</option>
+                    <option value="KG">KG (Quilo)</option>
+                    <option value="ROLO">ROLO (Rolo)</option>
+                    <option value="CX">CX (Caixa)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Categoria</label>
+                  <input
+                    type="text"
+                    value={editCategoria}
+                    onChange={(e) => setEditCategoria(e.target.value)}
+                    placeholder="Ex: Caixas e Quadros"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Subcategoria</label>
+                  <input
+                    type="text"
+                    value={editSubcategoria}
+                    onChange={(e) => setEditSubcategoria(e.target.value)}
+                    placeholder="Ex: Caixas de Laje / Teto"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Aplicações (Obra)</label>
+                  <input
+                    type="text"
+                    value={editAplicacoes}
+                    onChange={(e) => setEditAplicacoes(e.target.value)}
+                    placeholder="Ex: Laje, Teto"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Características Técnicas</label>
+                <input
+                  type="text"
+                  value={editCaracteristicas}
+                  onChange={(e) => setEditCaracteristicas(e.target.value)}
+                  placeholder="Ex: Octogonal, Chapa 16, PVC Rígido"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Código NCM</label>
+                  <input
+                    type="text"
+                    value={editCodigoNcm}
+                    onChange={(e) => setEditCodigoNcm(e.target.value)}
+                    placeholder="Ex: 8536.90.90"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Código / SKU Referência</label>
+                  <input
+                    type="text"
+                    value={editCodigoRef}
+                    onChange={(e) => setEditCodigoRef(e.target.value)}
+                    placeholder="Ex: REF-4001"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setModalEditarMaterial(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-medium transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={salvandoEdicaoMaterial}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-sm shadow-md transition disabled:opacity-50"
+                >
+                  {salvandoEdicaoMaterial ? 'Salvando...' : 'Salvar Alterações'}
                 </button>
               </div>
             </form>

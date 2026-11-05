@@ -456,6 +456,20 @@ export const api = {
     await axios.delete(`${API_BASE_URL}/conciliacao/materiais/${id}`);
   },
 
+  atualizarMaterialMestre: async (id: number, dados: {
+    descricaoPadrao: string;
+    unidadePadrao: string;
+    categoria?: string;
+    subcategoria?: string;
+    aplicacoes?: string;
+    caracteristicas?: string;
+    codigoNcm?: string;
+    codigoReferencia?: string;
+  }): Promise<ItemCanonico> => {
+    const res = await axios.put(`${API_BASE_URL}/conciliacao/materiais/${id}`, dados);
+    return res.data;
+  },
+
   zerarBaseTreinamentoETeste: async (): Promise<{ message: string }> => {
     const res = await axios.post(`${API_BASE_URL}/conciliacao/base/zerar-dados-teste`);
     return res.data;

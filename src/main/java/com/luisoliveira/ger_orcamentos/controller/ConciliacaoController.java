@@ -64,6 +64,15 @@ public class ConciliacaoController {
         return ResponseEntity.ok(conciliacaoService.criarMaterialMestre(dto, usuarioNome));
     }
 
+    @PutMapping("/materiais/{id}")
+    public ResponseEntity<ItemCanonico> atualizarMaterialMestre(
+            @PathVariable Long id,
+            @RequestBody CriarMaterialMestreRequestDto dto,
+            Authentication auth) {
+        String usuarioNome = (auth != null) ? auth.getName() : "Usuário";
+        return ResponseEntity.ok(conciliacaoService.atualizarMaterialMestre(id, dto, usuarioNome));
+    }
+
     @DeleteMapping("/materiais/{id}")
     public ResponseEntity<Void> deletarMaterialMestre(
             @PathVariable Long id,

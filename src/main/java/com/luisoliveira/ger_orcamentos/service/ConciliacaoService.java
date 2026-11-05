@@ -925,6 +925,65 @@ public class ConciliacaoService {
     }
 
     @Transactional
+    public ItemCanonico atualizarMaterialMestre(Long id, CriarMaterialMestreRequestDto dto, String usuarioNome) {
+        ItemCanonico item = itemCanonicoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Material mestre não encontrado: ID " + id));
+
+        if (dto.descricaoPadrao() != null && !dto.descricaoPadrao().isBlank()) {
+            String desc = dto.descricaoPadrao().trim().toUpperCase();
+            String norm = normalizarTexto(desc);
+            Optional<ItemCanonico> duplicado = itemCanonicoRepository.findByDescricaoNormalizada(norm);
+            if (duplicado.isPresent() && !duplicado.get().getId().equals(id)) {
+                throw new IllegalArgumentException("Já existe outro material cadastrado com a descrição: " + desc);
+            }
+            item.setDescricaoPadrao(desc);
+            item.setDescricaoNormalizada(norm);
+        }
+
+        if (dto.unidadePadrao() != null && !dto.unidadePadrao().isBlank()) {
+            item.setUnidadePadrao(dto.unidadePadrao().trim().toUpperCase());
+        }
+
+        if (dto.categoria() != null) {
+            item.setCategoria(dto.categoria().trim());
+        }
+
+        if (dto.subcategoria() != null) {
+            item.setSubcategoria(dto.subcategoria().trim());
+        }
+
+        if (dto.aplicacoes() != null) {
+            item.setAplicacoes(dto.aplicacoes().trim());
+        }
+
+        if (dto.caracteristicas() != null) {
+            item.setCaracteristicas(dto.caracteristicas().trim());
+        }
+
+        if (dto.codigoNcm() != null) {
+            item.setCodigoNcm(dto.codigoNcm().trim());
+        }
+
+        if (dto.codigoReferencia() != null) {
+            item.setCodigoReferencia(dto.codigoReferencia().trim());
+        }
+
+        ItemCanonico salvo = itemCanonicoRepository.save(item);
+
+        if (auditoriaService != null) {
+            auditoriaService.registrar(
+                    "EDICAO",
+                    "MATERIAL_MESTRE",
+                    String.valueOf(salvo.getId()),
+                    String.format("Material Mestre atualizado por %s: '%s' (ID %d, Categoria: %s, Subcategoria: %s)",
+                            usuarioNome, salvo.getDescricaoPadrao(), salvo.getId(), salvo.getCategoria(), salvo.getSubcategoria())
+            );
+        }
+
+        return salvo;
+    }
+
+    @Transactional
     public void deletarMaterialMestre(Long id, String usuarioNome) {
         ItemCanonico item = itemCanonicoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Material mestre não encontrado: ID " + id));

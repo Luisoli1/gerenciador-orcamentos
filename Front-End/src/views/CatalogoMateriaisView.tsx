@@ -97,6 +97,7 @@ export function CatalogoMateriaisView() {
   const [modoImportacao, setModoImportacao] = useState<'pdf' | 'manual'>('pdf');
   const [arquivosPdf, setArquivosPdf] = useState<File[]>([]);
   const [progressoPdf, setProgressoPdf] = useState<{ atual: number; total: number; nomeAtual: string } | null>(null);
+  const cancelarEnvioRef = React.useRef(false);
   const [loteTexto, setLoteTexto] = useState('');
   const [loteFornecedor, setLoteFornecedor] = useState('');
   const [loteDocumento, setLoteDocumento] = useState('');
@@ -314,6 +315,7 @@ export function CatalogoMateriaisView() {
       return;
     }
 
+    cancelarEnvioRef.current = false;
     setEnfileirandoLote(true);
     let totalProcessados = 0;
     let totalItens = 0;
@@ -322,6 +324,11 @@ export function CatalogoMateriaisView() {
 
     try {
       for (let i = 0; i < arquivosPdf.length; i++) {
+        if (cancelarEnvioRef.current) {
+          errosOcorridos.push('Processamento interrompido a pedido do usuário.');
+          break;
+        }
+
         const file = arquivosPdf[i];
         setProgressoPdf({
           atual: i + 1,
@@ -367,6 +374,7 @@ export function CatalogoMateriaisView() {
     } finally {
       setEnfileirandoLote(false);
       setProgressoPdf(null);
+      cancelarEnvioRef.current = false;
     }
   };
 
@@ -1602,6 +1610,24 @@ export function CatalogoMateriaisView() {
                     label="Clique ou arraste catálogos e orçamentos em PDF aqui"
                     hint="Suporta múltiplos PDFs simultâneos (Tigre, Amanco, Schneider, etc.). A IA lerá itens, descrições e unidades."
                   />
+
+                  {arquivosPdf.length > 0 && (
+                    <div className="flex items-center justify-between px-1 text-xs text-slate-400">
+                      <span>{arquivosPdf.length} arquivo(s) selecionado(s)</span>
+                      {arquivosPdf.length > 15 && (
+                        <span className="text-amber-400 font-medium">
+                          ⚠️ Lote grande (~{Math.ceil(arquivosPdf.length * 10 / 60)} min). O sistema processará arquivo por arquivo.
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl text-xs text-slate-400 space-y-1">
+                    <p className="font-semibold text-slate-300">💡 Dica de Desempenho e Limites da Nuvem:</p>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Como a IA analisa meticulosamente cada página e tabela (~10s por documento), <strong>o ideal para não cansar o navegador é enviar lotes de 5 a 15 PDFs por vez</strong>. O aprendizado é acumulativo, você pode subir em rodadas sucessivas com segurança.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-1.5 pt-1">
@@ -1645,9 +1671,16 @@ export function CatalogoMateriaisView() {
                     />
                   </div>
 
-                  <p className="text-[11px] text-slate-400">
-                    Processamento individual para evitar quedas de conexão ou limite de tempo na nuvem.
-                  </p>
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Processando individualmente na nuvem com resiliência.</span>
+                    <button
+                      type="button"
+                      onClick={() => { cancelarEnvioRef.current = true; }}
+                      className="text-rose-400 hover:text-rose-300 font-semibold hover:underline"
+                    >
+                      Interromper
+                    </button>
+                  </div>
                 </div>
               )}
 

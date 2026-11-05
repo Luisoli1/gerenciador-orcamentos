@@ -100,3 +100,4 @@ public class ConversaoPadrao implements Serializable {
         return Objects.hashCode(id);
     }
 }
+

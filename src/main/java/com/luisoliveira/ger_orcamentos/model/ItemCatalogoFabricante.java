@@ -92,3 +92,4 @@ public class ItemCatalogoFabricante implements Serializable {
         this.dataImportacao = dataImportacao;
     }
 }
+

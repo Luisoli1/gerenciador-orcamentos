@@ -89,3 +89,4 @@ public class ItemConversaoUnidade implements Serializable {
         return Objects.hashCode(id);
     }
 }
+

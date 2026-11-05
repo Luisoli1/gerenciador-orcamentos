@@ -385,3 +385,46 @@ export interface ConversaoPadrao {
   ativo?: boolean;
 }
 
+// --- FILA DE TREINAMENTO & VALIDAÇÃO EM MASSA ---
+
+export interface SugestaoItemTreinamento {
+  itemCanonicoId: number;
+  descricaoPadrao: string;
+  unidadePadrao: string;
+  categoria?: string;
+  confianca: number;
+  justificativa: string;
+}
+
+export interface ItemTreinamento {
+  id: number;
+  descricaoBruta: string;
+  unidadeBruta?: string;
+  fornecedorOrigem?: string;
+  documentoOrigem?: string;
+  tipoFonte: string;
+  status: string;
+  sugestoes: SugestaoItemTreinamento[];
+}
+
+export interface ValidarItemTreinamentoRequest {
+  itemTreinamentoId: number;
+  acao: 'VINCULAR_EXISTENTE' | 'CRIAR_NOVO' | 'IGNORAR';
+  itemCanonicoId?: number;
+  novaDescricaoCanonico?: string;
+  unidadePadrao?: string;
+  categoria?: string;
+  codigoNcm?: string;
+  cadastrarConversao?: boolean;
+  fatorConversao?: number;
+}
+
+export interface EstatisticasTreinamento {
+  totalPendentes: number;
+  totalValidados: number;
+  totalIgnorados: number;
+  totalGeral: number;
+  percentualConcluido: number;
+}
+
+

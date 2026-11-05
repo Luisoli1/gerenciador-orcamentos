@@ -13,3 +13,4 @@ public interface ItemCatalogoFabricanteRepository extends JpaRepository<ItemCata
     List<ItemCatalogoFabricante> findByFabricanteId(Long fabricanteId);
     List<ItemCatalogoFabricante> findByItemCanonicoId(Long itemCanonicoId);
 }
+

@@ -1,6 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
-import type { ItemAlias, ItemCanonico, ConversaoPadrao } from '../types';
+import type { 
+  ItemAlias, 
+  ItemCanonico, 
+  ConversaoPadrao, 
+  ItemTreinamento, 
+  EstatisticasTreinamento, 
+  ItemQuadroDTO 
+} from '../types';
 import { 
   BookOpen, 
   Search, 
@@ -14,16 +21,24 @@ import {
   Scale, 
   HelpCircle, 
   Tag, 
-  ArrowRight,
-  ShieldCheck,
-  Calendar,
-  User,
-  SlidersHorizontal,
-  X
+  ArrowRight, 
+  ShieldCheck, 
+  Calendar, 
+  User, 
+  SlidersHorizontal, 
+  X, 
+  Sparkles, 
+  Check, 
+  SkipForward, 
+  FileText, 
+  Upload, 
+  Zap, 
+  ChevronRight, 
+  Keyboard 
 } from 'lucide-react';
 
 export function CatalogoMateriaisView() {
-  const [activeTab, setActiveTab] = useState<'aliases' | 'materiais' | 'conversoes'>('aliases');
+  const [activeTab, setActiveTab] = useState<'aliases' | 'materiais' | 'conversoes' | 'treinamento'>('aliases');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState<string | null>(null);
@@ -53,7 +68,27 @@ export function CatalogoMateriaisView() {
   // Estados de Conversões
   const [conversoes, setConversoes] = useState<ConversaoPadrao[]>([]);
 
-  // Carregamento de Dados
+  // Estados da Fila de Treinamento (Modo Validação em Massa)
+  const [itemTreinando, setItemTreinando] = useState<ItemTreinamento | null>(null);
+  const [estatisticas, setEstatisticas] = useState<EstatisticasTreinamento | null>(null);
+  const [opcaoTreino, setOpcaoTreino] = useState<'sugestao' | 'novo' | 'ignorar'>('sugestao');
+  const [sugestaoEscolhidaIdx, setSugestaoEscolhidaIdx] = useState<number>(0);
+  const [novoTreinoDescricao, setNovoTreinoDescricao] = useState('');
+  const [novoTreinoUnidade, setNovoTreinoUnidade] = useState('UN');
+  const [novoTreinoCategoria, setNovoTreinoCategoria] = useState('');
+  const [cadastrarConversaoTreino, setCadastrarConversaoTreino] = useState(false);
+  const [fatorConversaoTreino, setFatorConversaoTreino] = useState<number>(1);
+  const [processandoTreino, setProcessandoTreino] = useState(false);
+
+  // Modal de Enfileirar Lote
+  const [modalLoteAberto, setModalLoteAberto] = useState(false);
+  const [loteTexto, setLoteTexto] = useState('');
+  const [loteFornecedor, setLoteFornecedor] = useState('');
+  const [loteDocumento, setLoteDocumento] = useState('');
+  const [loteTipoFonte, setLoteTipoFonte] = useState('ORCAMENTO_HISTORICO');
+  const [enfileirandoLote, setEnfileirandoLote] = useState(false);
+
+  // Carregamento de Dados Gerais
   const carregarDados = async () => {
     setLoading(true);
     setError(null);
@@ -73,9 +108,38 @@ export function CatalogoMateriaisView() {
     }
   };
 
+  // Carregamento da Fila de Treinamento
+  const carregarFilaTreinamento = useCallback(async () => {
+    try {
+      const [proximo, stats] = await Promise.all([
+        api.obterProximoItemTreinamento(),
+        api.obterEstatisticasTreinamento()
+      ]);
+      setItemTreinando(proximo);
+      setEstatisticas(stats);
+
+      if (proximo) {
+        setOpcaoTreino(proximo.sugestoes && proximo.sugestoes.length > 0 ? 'sugestao' : 'novo');
+        setSugestaoEscolhidaIdx(0);
+        setNovoTreinoDescricao(proximo.descricaoBruta);
+        setNovoTreinoUnidade(proximo.unidadeBruta || 'UN');
+        setCadastrarConversaoTreino(false);
+        setFatorConversaoTreino(1);
+      }
+    } catch (err: any) {
+      console.error('Erro ao carregar fila de treinamento:', err);
+    }
+  }, []);
+
   useEffect(() => {
     carregarDados();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'treinamento') {
+      carregarFilaTreinamento();
+    }
+  }, [activeTab, carregarFilaTreinamento]);
 
   const handleBuscarAliases = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,6 +259,136 @@ export function CatalogoMateriaisView() {
     }
   };
 
+  // Enfileirar Lote de Textos Históricos
+  const handleEnfileirarLote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const linhas = loteTexto
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+
+    if (linhas.length === 0) {
+      alert('Insira ao menos um item para enfileirar.');
+      return;
+    }
+
+    setEnfileirandoLote(true);
+    try {
+      const itensDto: ItemQuadroDTO[] = linhas.map(l => {
+        // Tenta identificar unidade se informada no formato "Item - 30 BR" ou apenas texto
+        return {
+          descricao: l,
+          unidadeMedida: 'UN',
+        };
+      });
+
+      const qtd = await api.enfileirarItensTreinamento(
+        itensDto,
+        loteFornecedor.trim() || undefined,
+        loteDocumento.trim() || 'Importação Manual',
+        loteTipoFonte
+      );
+
+      setSucesso(`${qtd} novos itens enfileirados para treinamento!`);
+      setModalLoteAberto(false);
+      setLoteTexto('');
+      setLoteFornecedor('');
+      setLoteDocumento('');
+      setTimeout(() => setSucesso(null), 4000);
+      await carregarFilaTreinamento();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Erro ao enfileirar lote.');
+    } finally {
+      setEnfileirandoLote(false);
+    }
+  };
+
+  // Confirmar Item no Treinamento em Massa
+  const handleConfirmarTreinamento = async () => {
+    if (!itemTreinando) return;
+    setProcessandoTreino(true);
+
+    try {
+      let acao: 'VINCULAR_EXISTENTE' | 'CRIAR_NOVO' | 'IGNORAR' = 'VINCULAR_EXISTENTE';
+      let itemCanonicoId: number | undefined;
+
+      if (opcaoTreino === 'ignorar') {
+        acao = 'IGNORAR';
+      } else if (opcaoTreino === 'novo') {
+        acao = 'CRIAR_NOVO';
+      } else {
+        const sug = itemTreinando.sugestoes[sugestaoEscolhidaIdx];
+        if (!sug) {
+          acao = 'CRIAR_NOVO';
+        } else {
+          itemCanonicoId = sug.itemCanonicoId;
+        }
+      }
+
+      const proximo = await api.validarItemTreinamento({
+        itemTreinamentoId: itemTreinando.id,
+        acao,
+        itemCanonicoId,
+        novaDescricaoCanonico: opcaoTreino === 'novo' ? novoTreinoDescricao.trim() : undefined,
+        unidadePadrao: novoTreinoUnidade,
+        categoria: novoTreinoCategoria || undefined,
+        cadastrarConversao: cadastrarConversaoTreino,
+        fatorConversao: cadastrarConversaoTreino ? Number(fatorConversaoTreino) : undefined,
+      });
+
+      // Atualiza estatísticas e item
+      const stats = await api.obterEstatisticasTreinamento();
+      setEstatisticas(stats);
+      setItemTreinando(proximo);
+
+      if (proximo) {
+        setOpcaoTreino(proximo.sugestoes && proximo.sugestoes.length > 0 ? 'sugestao' : 'novo');
+        setSugestaoEscolhidaIdx(0);
+        setNovoTreinoDescricao(proximo.descricaoBruta);
+        setNovoTreinoUnidade(proximo.unidadeBruta || 'UN');
+        setCadastrarConversaoTreino(false);
+        setFatorConversaoTreino(1);
+      }
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Erro ao validar item.');
+    } finally {
+      setProcessandoTreino(false);
+    }
+  };
+
+  // Atalhos de Teclado no Treinador
+  useEffect(() => {
+    if (activeTab !== 'treinamento' || !itemTreinando || modalLoteAberto) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignora se estiver digitando em campo de texto
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+
+      if (e.key === '1' && itemTreinando.sugestoes.length >= 1) {
+        setOpcaoTreino('sugestao');
+        setSugestaoEscolhidaIdx(0);
+      } else if (e.key === '2' && itemTreinando.sugestoes.length >= 2) {
+        setOpcaoTreino('sugestao');
+        setSugestaoEscolhidaIdx(1);
+      } else if (e.key === '3' && itemTreinando.sugestoes.length >= 3) {
+        setOpcaoTreino('sugestao');
+        setSugestaoEscolhidaIdx(2);
+      } else if (e.key.toLowerCase() === 'n') {
+        setOpcaoTreino('novo');
+      } else if (e.key.toLowerCase() === 'i') {
+        setOpcaoTreino('ignorar');
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        handleConfirmarTreinamento();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, itemTreinando, opcaoTreino, sugestaoEscolhidaIdx, modalLoteAberto, novoTreinoDescricao, cadastrarConversaoTreino, fatorConversaoTreino]);
+
   return (
     <div className="space-y-6">
       {/* CABEÇALHO */}
@@ -205,9 +399,9 @@ export function CatalogoMateriaisView() {
               <BookOpen className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">Catálogo & Base de Sinônimos (De-Para)</h1>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Catálogo & Base de Conhecimento</h1>
               <p className="text-sm text-slate-400 mt-1">
-                Base de conhecimento contínua da Makinsthal: conciliação inteligente, equivalência de unidades e auditoria de materiais.
+                Construção contínua da inteligência da Makinsthal: catálogos, orçamentos históricos, equivalência e conversão de unidades.
               </p>
             </div>
           </div>
@@ -222,6 +416,7 @@ export function CatalogoMateriaisView() {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Atualizar
           </button>
+
           {activeTab === 'materiais' && (
             <button
               onClick={() => setModalNovoMaterial(true)}
@@ -229,6 +424,16 @@ export function CatalogoMateriaisView() {
             >
               <Plus className="w-4 h-4" />
               Novo Material Mestre
+            </button>
+          )}
+
+          {activeTab === 'treinamento' && (
+            <button
+              onClick={() => setModalLoteAberto(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl shadow-lg shadow-amber-500/20 transition text-sm"
+            >
+              <Upload className="w-4 h-4" />
+              Importar / Enfileirar Itens
             </button>
           )}
         </div>
@@ -250,7 +455,24 @@ export function CatalogoMateriaisView() {
       )}
 
       {/* ABAS DE NAVEGAÇÃO */}
-      <div className="flex items-center gap-2 border-b border-slate-700/60 pb-3">
+      <div className="flex items-center gap-2 border-b border-slate-700/60 pb-3 flex-wrap">
+        <button
+          onClick={() => setActiveTab('treinamento')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition ${
+            activeTab === 'treinamento'
+              ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-bold'
+              : 'text-amber-400/90 hover:text-amber-300 hover:bg-amber-500/10 border border-amber-500/20'
+          }`}
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>Treinador de Materiais (Modo em Massa)</span>
+          {estatisticas && estatisticas.totalPendentes > 0 && (
+            <span className="px-2 py-0.5 bg-slate-950/80 text-amber-300 rounded-full text-xs font-mono font-bold">
+              {estatisticas.totalPendentes}
+            </span>
+          )}
+        </button>
+
         <button
           onClick={() => setActiveTab('aliases')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition ${
@@ -288,10 +510,350 @@ export function CatalogoMateriaisView() {
         </button>
       </div>
 
+      {/* ABA 4: TREINADOR DE MATERIAIS (MODO VALIDAÇÃO EM MASSA) */}
+      {activeTab === 'treinamento' && (
+        <div className="space-y-6">
+          {/* BARRA DE PROGRESSO & MÉTRICAS */}
+          {estatisticas && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="p-4 bg-slate-800/70 border border-slate-700/80 rounded-2xl">
+                <span className="text-xs text-slate-400">Pendentes para Validar</span>
+                <p className="text-2xl font-bold text-amber-400 font-mono mt-1">
+                  {estatisticas.totalPendentes}
+                </p>
+              </div>
+
+              <div className="p-4 bg-slate-800/70 border border-slate-700/80 rounded-2xl">
+                <span className="text-xs text-slate-400">Validados & Aprendidos</span>
+                <p className="text-2xl font-bold text-emerald-400 font-mono mt-1">
+                  {estatisticas.totalValidados}
+                </p>
+              </div>
+
+              <div className="p-4 bg-slate-800/70 border border-slate-700/80 rounded-2xl">
+                <span className="text-xs text-slate-400">Ignorados / Descartados</span>
+                <p className="text-2xl font-bold text-slate-400 font-mono mt-1">
+                  {estatisticas.totalIgnorados}
+                </p>
+              </div>
+
+              <div className="p-4 bg-slate-800/70 border border-slate-700/80 rounded-2xl flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400">Progresso Geral</span>
+                  <span className="text-xs font-bold text-amber-400 font-mono">{estatisticas.percentualConcluido}%</span>
+                </div>
+                <div className="w-full bg-slate-700 h-2.5 rounded-full overflow-hidden mt-2">
+                  <div 
+                    className="bg-gradient-to-r from-amber-500 to-emerald-500 h-full rounded-full transition-all duration-300"
+                    style={{ width: `${estatisticas.percentualConcluido}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ÁREA CENTRAL DO ITEM EM TREINAMENTO */}
+          {itemTreinando ? (
+            <div className="bg-slate-800/90 border border-amber-500/30 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
+              
+              {/* CABEÇALHO DO ITEM EM FOCO */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700/70 pb-5">
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <span className="px-2.5 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold rounded-lg uppercase tracking-wider">
+                      Item Bruto Encontrado
+                    </span>
+                    <span className="px-2.5 py-0.5 bg-slate-700 text-slate-300 text-xs rounded-lg font-medium">
+                      Fonte: {itemTreinando.tipoFonte === 'ORCAMENTO_HISTORICO' ? 'Orçamento Histórico' : 'Catálogo'}
+                    </span>
+                    {itemTreinando.fornecedorOrigem && (
+                      <span className="px-2.5 py-0.5 bg-slate-700 text-slate-300 text-xs rounded-lg">
+                        Fornecedor: <strong>{itemTreinando.fornecedorOrigem}</strong>
+                      </span>
+                    )}
+                    {itemTreinando.documentoOrigem && (
+                      <span className="text-xs text-slate-400">
+                        ({itemTreinando.documentoOrigem})
+                      </span>
+                    )}
+                  </div>
+
+                  <h2 className="text-2xl md:text-3xl font-extrabold font-mono text-white tracking-wide">
+                    "{itemTreinando.descricaoBruta}"
+                  </h2>
+                </div>
+
+                <div className="flex items-center gap-2 self-start md:self-center">
+                  <span className="px-3 py-1 bg-slate-900 border border-slate-700 rounded-xl text-xs font-mono text-slate-300">
+                    Unidade: <strong className="text-amber-400">{itemTreinando.unidadeBruta || 'UN'}</strong>
+                  </span>
+                </div>
+              </div>
+
+              {/* OPÇÃO 1: SUGESTÕES DA IA / SINTÁTICO */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    Sugestões Ranqueadas pela IA (A decisão final é sua):
+                  </span>
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <Keyboard className="w-3.5 h-3.5" />
+                    Use as teclas [1], [2], [3] ou clique para selecionar
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2.5">
+                  {itemTreinando.sugestoes.map((sug, idx) => (
+                    <div
+                      key={sug.itemCanonicoId}
+                      onClick={() => {
+                        setOpcaoTreino('sugestao');
+                        setSugestaoEscolhidaIdx(idx);
+                      }}
+                      className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                        opcaoTreino === 'sugestao' && sugestaoEscolhidaIdx === idx
+                          ? 'bg-amber-500/10 border-amber-500 shadow-lg shadow-amber-500/5'
+                          : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs border ${
+                          opcaoTreino === 'sugestao' && sugestaoEscolhidaIdx === idx
+                            ? 'bg-amber-500 text-slate-950 border-amber-500'
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                        }`}>
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-slate-100">
+                              {sug.descricaoPadrao}
+                            </span>
+                            <span className="px-1.5 py-0.5 bg-slate-800 text-slate-400 text-[10px] font-mono rounded">
+                              {sug.unidadePadrao}
+                            </span>
+                          </div>
+                          <span className="text-xs text-slate-400 mt-0.5 block">
+                            {sug.justificativa}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <span className={`px-2.5 py-1 rounded-xl text-xs font-bold border font-mono ${
+                          sug.confianca >= 80
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                        }`}>
+                          {sug.confianca}% Match
+                        </span>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${
+                          opcaoTreino === 'sugestao' && sugestaoEscolhidaIdx === idx
+                            ? 'bg-amber-500 border-amber-500 text-slate-950'
+                            : 'border-slate-700'
+                        }`}>
+                          {opcaoTreino === 'sugestao' && sugestaoEscolhidaIdx === idx && (
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* OPÇÃO: CRIAR NOVO MATERIAL MESTRE */}
+                  <div
+                    onClick={() => setOpcaoTreino('novo')}
+                    className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                      opcaoTreino === 'novo'
+                        ? 'bg-amber-500/10 border-amber-500 shadow-lg shadow-amber-500/5'
+                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs border ${
+                          opcaoTreino === 'novo'
+                            ? 'bg-amber-500 text-slate-950 border-amber-500'
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                        }`}>
+                          N
+                        </span>
+                        <div>
+                          <span className="font-bold text-sm text-slate-100 block">
+                            Criar Novo Material Mestre no Catálogo
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            Nenhuma das sugestões acima corresponde a este item com exatidão técnica.
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${
+                        opcaoTreino === 'novo'
+                          ? 'bg-amber-500 border-amber-500 text-slate-950'
+                          : 'border-slate-700'
+                      }`}>
+                        {opcaoTreino === 'novo' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                      </div>
+                    </div>
+
+                    {/* CAMPOS EXPANDIDOS QUANDO 'NOVO' ESTIVER SELECIONADO */}
+                    {opcaoTreino === 'novo' && (
+                      <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="md:col-span-2">
+                          <label className="text-xs font-semibold text-slate-300 block mb-1">
+                            Descrição Padronizada do Novo Material:
+                          </label>
+                          <input
+                            type="text"
+                            value={novoTreinoDescricao}
+                            onChange={(e) => setNovoTreinoDescricao(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-slate-300 block mb-1">
+                            Unidade Base:
+                          </label>
+                          <select
+                            value={novoTreinoUnidade}
+                            onChange={(e) => setNovoTreinoUnidade(e.target.value)}
+                            className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                          >
+                            <option value="M">M (Metro)</option>
+                            <option value="UN">UN (Unidade)</option>
+                            <option value="BARRA">BARRA (Barra)</option>
+                            <option value="PÇ">PÇ (Peça)</option>
+                            <option value="KG">KG (Quilo)</option>
+                            <option value="ROLO">ROLO (Rolo)</option>
+                            <option value="CX">CX (Caixa)</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* OPÇÃO: IGNORAR ITEM */}
+                  <div
+                    onClick={() => setOpcaoTreino('ignorar')}
+                    className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                      opcaoTreino === 'ignorar'
+                        ? 'bg-rose-500/10 border-rose-500/50'
+                        : 'bg-slate-900/30 border-slate-800 hover:border-slate-700 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs border ${
+                        opcaoTreino === 'ignorar'
+                          ? 'bg-rose-500 text-white border-rose-500'
+                          : 'bg-slate-800 text-slate-500 border-slate-700'
+                      }`}>
+                        I
+                      </span>
+                      <span className="text-xs font-medium text-slate-400">
+                        Ignorar este item (não cadastrar e passar para o próximo)
+                      </span>
+                    </div>
+                    {opcaoTreino === 'ignorar' && (
+                      <span className="text-xs font-bold text-rose-400">Selecionado para Descarte</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* SEÇÃO DE CONVERSÃO DE UNIDADE ESPECÍFICA (A REGRA FUNDAMENTAL) */}
+              {opcaoTreino !== 'ignorar' && (
+                <div className="p-4 bg-slate-900/70 border border-slate-700/80 rounded-2xl space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Scale className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <span className="font-semibold text-xs text-white uppercase tracking-wider">
+                        Atenção a Conversões de Medida (Item Canônico é a Fonte da Verdade):
+                      </span>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Nem toda barra tem 3 metros e nem todo rolo tem 100 metros. Se este material possuir uma embalagem específica, cadastre a conversão definitiva aqui.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-1">
+                    <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={cadastrarConversaoTreino}
+                        onChange={(e) => setCadastrarConversaoTreino(e.target.checked)}
+                        className="rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-0"
+                      />
+                      <span>Cadastrar conversão específica para este material</span>
+                    </label>
+
+                    {cadastrarConversaoTreino && (
+                      <div className="flex items-center gap-2 pl-4 border-l border-slate-700">
+                        <span className="text-xs text-slate-400">1 {itemTreinando.unidadeBruta || 'UN'} = </span>
+                        <input
+                          type="number"
+                          step="any"
+                          value={fatorConversaoTreino}
+                          onChange={(e) => setFatorConversaoTreino(Number(e.target.value))}
+                          placeholder="Fator"
+                          className="w-24 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-xs text-amber-400 font-mono font-bold text-center focus:outline-none focus:border-amber-500"
+                        />
+                        <span className="text-xs text-slate-400 font-bold">
+                          {opcaoTreino === 'novo' ? novoTreinoUnidade : (itemTreinando.sugestoes[sugestaoEscolhidaIdx]?.unidadePadrao || 'UN')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* BOTÕES DE CONFIRMAÇÃO & ATALHOS */}
+              <div className="flex items-center justify-between border-t border-slate-700/70 pt-5">
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span>A decisão validada cria um De-Para permanente e nunca mais será perguntada.</span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={processandoTreino}
+                    onClick={handleConfirmarTreinamento}
+                    className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-extrabold rounded-2xl text-sm shadow-xl shadow-amber-500/25 transition cursor-pointer active:scale-95 disabled:opacity-50"
+                  >
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>Confirmar e Próximo [Enter]</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          ) : (
+            <div className="p-12 text-center bg-slate-800/40 border border-slate-700/60 rounded-3xl space-y-4">
+              <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold text-white">Fila de Treinamento Vazia!</h3>
+              <p className="text-sm text-slate-400 max-w-md mx-auto">
+                Todos os materiais foram validados e convertidos em conhecimento permanente no sistema. Importe novos orçamentos históricos ou catálogos para continuar treinando!
+              </p>
+              <button
+                onClick={() => setModalLoteAberto(true)}
+                className="inline-flex items-center gap-2 px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-sm shadow-lg shadow-amber-500/20 transition"
+              >
+                <Upload className="w-4 h-4" />
+                Importar Novo Lote de Itens
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ABA 1: ALIASES & DE-PARA */}
       {activeTab === 'aliases' && (
         <div className="space-y-4">
-          {/* BARRA DE PESQUISA */}
           <form onSubmit={handleBuscarAliases} className="flex gap-3">
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
@@ -311,7 +873,6 @@ export function CatalogoMateriaisView() {
             </button>
           </form>
 
-          {/* TABELA DE ALIASES */}
           <div className="bg-slate-800/60 border border-slate-700/70 rounded-2xl overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-300">
@@ -330,7 +891,7 @@ export function CatalogoMateriaisView() {
                   {aliases.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-12 text-center text-slate-500">
-                        Nenhum sinônimo/alias encontrado na base. A cada QC confirmado, novos termos serão aprendidos aqui.
+                        Nenhum sinônimo/alias encontrado na base. Utilize o Treinador ou confirme QCs para alimentar a base.
                       </td>
                     </tr>
                   ) : (
@@ -362,11 +923,13 @@ export function CatalogoMateriaisView() {
                         </td>
                         <td className="py-3 px-4 text-center">
                           <span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
-                            alias.origem === 'USUARIO_CONFIRMADO' || alias.origem === 'MANUAL'
-                              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                            alias.origem === 'TREINAMENTO_HISTORICO'
+                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                              : alias.origem === 'USUARIO_CONFIRMADO' || alias.origem === 'MANUAL'
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                               : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
                           }`}>
-                            {alias.origem === 'USUARIO_CONFIRMADO' ? 'Orçamentista' : alias.origem}
+                            {alias.origem === 'TREINAMENTO_HISTORICO' ? 'Treinamento' : alias.origem === 'USUARIO_CONFIRMADO' ? 'Orçamentista' : alias.origem}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center font-mono text-xs text-slate-400">
@@ -409,7 +972,6 @@ export function CatalogoMateriaisView() {
       {/* ABA 2: MATERIAIS MESTRE */}
       {activeTab === 'materiais' && (
         <div className="space-y-4">
-          {/* BARRA DE PESQUISA */}
           <form onSubmit={handleBuscarMateriais} className="flex gap-3">
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
@@ -429,7 +991,6 @@ export function CatalogoMateriaisView() {
             </button>
           </form>
 
-          {/* TABELA DE MATERIAIS MESTRE */}
           <div className="bg-slate-800/60 border border-slate-700/70 rounded-2xl overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-300">
@@ -446,7 +1007,7 @@ export function CatalogoMateriaisView() {
                   {materiais.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-12 text-center text-slate-500">
-                        Nenhum material mestre cadastrado ainda. Crie um novo acima ou confirme itens na conciliação do QC!
+                        Nenhum material mestre cadastrado ainda. Crie um novo acima ou valide itens no Treinador!
                       </td>
                     </tr>
                   ) : (
@@ -494,9 +1055,9 @@ export function CatalogoMateriaisView() {
           <div className="p-4 bg-slate-800/80 border border-slate-700/70 rounded-xl text-sm text-slate-300 flex items-start gap-3">
             <Scale className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
             <div>
-              <span className="font-semibold text-white">Equalização Automática de Unidades de Medida:</span>
+              <span className="font-semibold text-white">Equalização de Unidades de Medida:</span>
               <p className="text-xs text-slate-400 mt-1">
-                Quando fornecedores cotam o mesmo material em unidades diferentes (ex: 30 barras vs 90 metros), o sistema utiliza estas regras oficiais de engenharia para converter e comparar o preço unitário justo sem distorções no QC.
+                As conversões padrão abaixo servem como atalhos de conveniência. Conversões cadastradas diretamente em cada Item Canônico (ex: 1 barra = 6m, 1 caixa = 500un) possuem prioridade absoluta e evitam distorções no QC.
               </p>
             </div>
           </div>
@@ -514,11 +1075,84 @@ export function CatalogoMateriaisView() {
                       {Number(conv.fatorMultiplicador)} {conv.unidadeDestino}
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-400 font-medium">Global</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Sugestão Global</span>
                 </div>
                 <p className="text-xs text-slate-400">{conv.descricaoRegra}</p>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ENFILEIRAR LOTE DE ITENS HISTÓRICOS */}
+      {modalLoteAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-white">Enfileirar Itens para Treinamento</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Cole os termos de orçamentos históricos ou catálogos para alimentar a fila.</p>
+              </div>
+              <button onClick={() => setModalLoteAberto(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEnfileirarLote} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Fornecedor / Origem:</label>
+                  <input
+                    type="text"
+                    value={loteFornecedor}
+                    onChange={(e) => setLoteFornecedor(e.target.value)}
+                    placeholder="Ex: Elecon, Soedral, Tigre"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Documento / Referência:</label>
+                  <input
+                    type="text"
+                    value={loteDocumento}
+                    onChange={(e) => setLoteDocumento(e.target.value)}
+                    placeholder="Ex: Orçamento 1042/2023"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  Itens Brutos (Cole um por linha):
+                </label>
+                <textarea
+                  required
+                  rows={8}
+                  value={loteTexto}
+                  onChange={(e) => setLoteTexto(e.target.value)}
+                  placeholder="FIO FLEX AZUL 2,5&#10;CX OCT TETO&#10;COND FLEX 2,5 AZ&#10;TUBO PVC 3/4..."
+                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setModalLoteAberto(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-medium transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={enfileirandoLote}
+                  className="px-6 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-sm shadow-md transition"
+                >
+                  {enfileirandoLote ? 'Enfileirando...' : 'Adicionar à Fila de Treinamento'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -751,3 +1385,5 @@ export function CatalogoMateriaisView() {
     </div>
   );
 }
+
+export default CatalogoMateriaisView;

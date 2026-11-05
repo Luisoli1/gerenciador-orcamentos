@@ -21,3 +21,4 @@ public interface ItemCanonicoRepository extends JpaRepository<ItemCanonico, Long
     @Query("SELECT c FROM ItemCanonico c WHERE c.ativo = true AND (LOWER(c.descricaoPadrao) LIKE LOWER(CONCAT('%', :termo, '%')) OR LOWER(c.descricaoNormalizada) LIKE LOWER(CONCAT('%', :termo, '%')))")
     List<ItemCanonico> buscarPorTermo(@Param("termo") String termo);
 }
+

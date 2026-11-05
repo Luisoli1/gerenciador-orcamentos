@@ -97,3 +97,4 @@ CREATE TABLE IF NOT EXISTS tb_item_conversao_unidade (
 -- 7. Inclusão da FK em tb_item_orcamento e tb_item_faturamento_direto
 ALTER TABLE tb_item_orcamento ADD COLUMN IF NOT EXISTS item_canonico_id BIGINT NULL;
 ALTER TABLE tb_item_faturamento_direto ADD COLUMN IF NOT EXISTS item_canonico_id BIGINT NULL;
+

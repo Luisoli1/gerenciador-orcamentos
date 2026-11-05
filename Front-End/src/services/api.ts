@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Obra, Fornecedor, QuadroComparativoDto, Qc, OrcamentoSalvo, ItemVariacaoDto, ConflitoQcDto, FaturamentoDireto, Usuario, LoginRequest, LoginResponse, AuditoriaLog, Role, ItemCanonico, ItemAlias, VerificacaoConciliacaoResponse, ConversaoPadrao } from '../types';
+import type { Obra, Fornecedor, QuadroComparativoDto, Qc, OrcamentoSalvo, ItemVariacaoDto, ConflitoQcDto, FaturamentoDireto, Usuario, LoginRequest, LoginResponse, AuditoriaLog, Role, ItemCanonico, ItemAlias, VerificacaoConciliacaoResponse, ConversaoPadrao, ItemTreinamento, ValidarItemTreinamentoRequest, EstatisticasTreinamento, ItemQuadroDTO } from '../types';
 import { salvarArquivo } from '../utils/fileDownloader';
 
 
@@ -378,6 +378,39 @@ export const api = {
 
   listarConversoesPadrao: async (): Promise<ConversaoPadrao[]> => {
     const res = await axios.get(`${API_BASE_URL}/conciliacao/conversoes`);
+    return res.data;
+  },
+
+  cadastrarConversaoItem: async (id: number, data: { unidadeOrigem: string; unidadeDestino: string; fatorMultiplicador: number }): Promise<any> => {
+    const res = await axios.post(`${API_BASE_URL}/conciliacao/materiais/${id}/conversoes`, data);
+    return res.data;
+  },
+
+  // --- TREINAMENTO DA BASE DE CONHECIMENTO (MODO VALIDAÇÃO EM MASSA) ---
+  obterProximoItemTreinamento: async (): Promise<ItemTreinamento | null> => {
+    const res = await axios.get(`${API_BASE_URL}/conciliacao/treinamento/proximo`);
+    if (res.status === 204 || !res.data) return null;
+    return res.data;
+  },
+
+  validarItemTreinamento: async (data: ValidarItemTreinamentoRequest): Promise<ItemTreinamento | null> => {
+    const res = await axios.post(`${API_BASE_URL}/conciliacao/treinamento/validar`, data);
+    if (res.status === 204 || !res.data) return null;
+    return res.data;
+  },
+
+  obterEstatisticasTreinamento: async (): Promise<EstatisticasTreinamento> => {
+    const res = await axios.get(`${API_BASE_URL}/conciliacao/treinamento/estatisticas`);
+    return res.data;
+  },
+
+  enfileirarItensTreinamento: async (itens: ItemQuadroDTO[], fornecedor?: string, documento?: string, tipoFonte?: string): Promise<number> => {
+    const params = new URLSearchParams();
+    if (fornecedor) params.append('fornecedor', fornecedor);
+    if (documento) params.append('documento', documento);
+    if (tipoFonte) params.append('tipoFonte', tipoFonte);
+
+    const res = await axios.post(`${API_BASE_URL}/conciliacao/treinamento/enfileirar?${params.toString()}`, itens);
     return res.data;
   },
 };

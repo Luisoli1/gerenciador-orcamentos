@@ -18,3 +18,4 @@ public record ItemAliasResponseDto(
         String alteradoPorNome,
         LocalDateTime dataAtualizacao
 ) {}
+

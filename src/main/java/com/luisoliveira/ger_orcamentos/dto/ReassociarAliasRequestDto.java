@@ -6,3 +6,4 @@ public record ReassociarAliasRequestDto(
         String unidadePadrao,
         String categoria
 ) {}
+

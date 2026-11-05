@@ -88,3 +88,4 @@ public class Fabricante implements Serializable {
         return Objects.hashCode(id);
     }
 }
+

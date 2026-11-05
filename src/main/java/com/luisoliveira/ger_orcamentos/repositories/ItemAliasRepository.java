@@ -30,3 +30,4 @@ public interface ItemAliasRepository extends JpaRepository<ItemAlias, Long> {
             ") ORDER BY a.dataAtualizacao DESC")
     List<ItemAlias> buscarAliasesPorFiltro(@Param("termo") String termo);
 }
+

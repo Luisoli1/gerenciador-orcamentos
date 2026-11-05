@@ -8,3 +8,4 @@ public record DiscrepanciaItemDto(
         List<String> fornecedoresFaltantes,
         List<SugestaoConciliacaoDto> possiveisEquivalentes
 ) {}
+

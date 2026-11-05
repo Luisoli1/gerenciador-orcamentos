@@ -12,3 +12,4 @@ public interface ItemConversaoUnidadeRepository extends JpaRepository<ItemConver
     Optional<ItemConversaoUnidade> findByItemCanonicoIdAndUnidadeOrigemAndUnidadeDestino(Long itemCanonicoId, String unidadeOrigem, String unidadeDestino);
     List<ItemConversaoUnidade> findByItemCanonicoId(Long itemCanonicoId);
 }
+

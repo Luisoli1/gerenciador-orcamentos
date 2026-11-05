@@ -146,3 +146,4 @@ public class ItemCanonico implements Serializable {
         return Objects.hashCode(id);
     }
 }
+

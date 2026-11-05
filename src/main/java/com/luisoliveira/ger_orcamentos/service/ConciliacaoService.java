@@ -38,6 +38,9 @@ public class ConciliacaoService {
     private ItemConversaoUnidadeRepository itemConversaoUnidadeRepository;
 
     @Autowired
+    private ItemTreinamentoFilaRepository itemTreinamentoFilaRepository;
+
+    @Autowired
     private AuditoriaService auditoriaService;
 
     @Autowired(required = false)
@@ -122,6 +125,38 @@ public class ConciliacaoService {
         }
 
         return BigDecimal.ONE;
+    }
+
+    @Transactional
+    public ItemConversaoUnidade cadastrarConversaoItem(Long itemCanonicoId, String unidadeOrigem, String unidadeDestino, BigDecimal fatorMultiplicador, String usuarioNome) {
+        ItemCanonico canonico = itemCanonicoRepository.findById(itemCanonicoId)
+                .orElseThrow(() -> new RuntimeException("Material mestre não encontrado: ID " + itemCanonicoId));
+
+        String uOrig = normalizarUnidade(unidadeOrigem);
+        String uDest = normalizarUnidade(unidadeDestino);
+
+        Optional<ItemConversaoUnidade> existente = itemConversaoUnidadeRepository
+                .findByItemCanonicoIdAndUnidadeOrigemAndUnidadeDestino(itemCanonicoId, uOrig, uDest);
+
+        ItemConversaoUnidade conv;
+        if (existente.isPresent()) {
+            conv = existente.get();
+            conv.setFatorMultiplicador(fatorMultiplicador);
+        } else {
+            conv = new ItemConversaoUnidade(canonico, uOrig, uDest, fatorMultiplicador);
+        }
+
+        ItemConversaoUnidade salvo = itemConversaoUnidadeRepository.save(conv);
+
+        auditoriaService.registrar(
+                "CONVERSAO_UNIDADE",
+                "CADASTRO_ESPECIFICO",
+                String.valueOf(salvo.getId()),
+                String.format("Conversão cadastrada para '%s': 1 %s = %s %s por %s",
+                        canonico.getDescricaoPadrao(), uOrig, fatorMultiplicador.toString(), uDest, usuarioNome)
+        );
+
+        return salvo;
     }
 
     // ==========================================
@@ -539,5 +574,174 @@ public class ConciliacaoService {
 
     public List<ConversaoPadrao> listarConversoesPadrao() {
         return conversaoPadraoRepository.findByAtivoTrue();
+    }
+
+    // ==========================================
+    // 8. FILA DE TREINAMENTO E VALIDAÇÃO EM MASSA
+    // ==========================================
+
+    @Transactional
+    public int enfileirarItensLote(List<ItemQuadroDTO> itens, String fornecedorOrigem, String documentoOrigem, String tipoFonte) {
+        if (itens == null || itens.isEmpty()) return 0;
+
+        int novosEnfileirados = 0;
+        for (ItemQuadroDTO it : itens) {
+            if (it.descricao() == null || it.descricao().isBlank()) continue;
+            String norm = normalizarTexto(it.descricao());
+
+            // 1. Se já existe como alias ativo para esse fornecedor ou global, não precisa treinar
+            List<ItemAlias> aliases = itemAliasRepository.buscarMelhorMatchAlias(norm, null);
+            if (!aliases.isEmpty()) {
+                continue;
+            }
+
+            // 2. Se já está na fila de treinamento, não duplica
+            if (itemTreinamentoFilaRepository.existsByDescricaoNormalizadaAndFornecedor(norm, fornecedorOrigem)) {
+                continue;
+            }
+
+            ItemTreinamentoFila filaItem = new ItemTreinamentoFila(
+                    it.descricao().trim(),
+                    norm,
+                    normalizarUnidade(it.unidadeMedida()),
+                    fornecedorOrigem,
+                    documentoOrigem,
+                    tipoFonte
+            );
+            itemTreinamentoFilaRepository.save(filaItem);
+            novosEnfileirados++;
+        }
+        return novosEnfileirados;
+    }
+
+    public ItemTreinamentoDto obterProximoItemParaTreinar() {
+        Optional<ItemTreinamentoFila> proximoOpt = itemTreinamentoFilaRepository.findFirstByStatusOrderByIdAsc("PENDENTE");
+        if (proximoOpt.isEmpty()) {
+            return null;
+        }
+
+        ItemTreinamentoFila itemFila = proximoOpt.get();
+        List<ItemCanonico> materiais = itemCanonicoRepository.findByAtivoTrueOrderByDescricaoPadraoAsc();
+        List<SugestaoItemTreinamentoDto> sugestoes = gerarTopSugestoes(itemFila.getDescricaoNormalizada(), materiais);
+
+        return new ItemTreinamentoDto(
+                itemFila.getId(),
+                itemFila.getDescricaoBruta(),
+                itemFila.getUnidadeBruta(),
+                itemFila.getFornecedorOrigem(),
+                itemFila.getDocumentoOrigem(),
+                itemFila.getTipoFonte(),
+                itemFila.getStatus(),
+                sugestoes
+        );
+    }
+
+    private List<SugestaoItemTreinamentoDto> gerarTopSugestoes(String normItem, List<ItemCanonico> materiais) {
+        List<SugestaoItemTreinamentoDto> lista = new ArrayList<>();
+        List<String> numsA = extrairTokensNumericos(normItem);
+
+        for (ItemCanonico mat : materiais) {
+            String normMat = mat.getDescricaoNormalizada();
+            int score = 0;
+            String justificativa;
+
+            if (normItem.equals(normMat)) {
+                score = 98;
+                justificativa = "Texto exato pós-normalização.";
+            } else {
+                List<String> numsB = extrairTokensNumericos(normMat);
+                if (!numsA.isEmpty() && !numsB.isEmpty()) {
+                    boolean temNum = numsA.stream().anyMatch(numsB::contains);
+                    if (!temNum) {
+                        continue; // números técnicos incompatíveis não são sugeridos
+                    }
+                }
+                score = calcularScoreSobreposicao(normItem, normMat);
+                justificativa = "Similaridade de termos técnicos (" + score + "%).";
+            }
+
+            if (score >= 40) {
+                lista.add(new SugestaoItemTreinamentoDto(
+                        mat.getId(),
+                        mat.getDescricaoPadrao(),
+                        mat.getUnidadePadrao(),
+                        mat.getCategoria(),
+                        score,
+                        justificativa
+                ));
+            }
+        }
+
+        lista.sort(Comparator.comparingInt(SugestaoItemTreinamentoDto::confianca).reversed());
+        return lista.stream().limit(4).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public ItemTreinamentoDto validarItemTreinamento(ValidarItemTreinamentoRequestDto request, String usuarioNome) {
+        ItemTreinamentoFila itemFila = itemTreinamentoFilaRepository.findById(request.itemTreinamentoId())
+                .orElseThrow(() -> new RuntimeException("Item da fila de treinamento não encontrado: ID " + request.itemTreinamentoId()));
+
+        if ("IGNORAR".equalsIgnoreCase(request.acao())) {
+            itemFila.setStatus("IGNORADO");
+            itemFila.setValidadoPor(usuarioNome);
+            itemFila.setDataValidacao(LocalDateTime.now());
+            itemTreinamentoFilaRepository.save(itemFila);
+            return obterProximoItemParaTreinar();
+        }
+
+        ItemCanonico canonico;
+        if ("CRIAR_NOVO".equalsIgnoreCase(request.acao()) || request.itemCanonicoId() == null) {
+            String descPadrao = (request.novaDescricaoCanonico() != null && !request.novaDescricaoCanonico().isBlank())
+                    ? request.novaDescricaoCanonico().trim().toUpperCase()
+                    : itemFila.getDescricaoBruta().trim().toUpperCase();
+
+            String norm = normalizarTexto(descPadrao);
+            canonico = itemCanonicoRepository.findByDescricaoNormalizada(norm)
+                    .orElseGet(() -> {
+                        ItemCanonico novo = new ItemCanonico(
+                                descPadrao, norm,
+                                (request.unidadePadrao() != null && !request.unidadePadrao().isBlank()) ? request.unidadePadrao() : itemFila.getUnidadeBruta(),
+                                request.categoria(),
+                                usuarioNome
+                        );
+                        novo.setCodigoNcm(request.codigoNcm());
+                        return itemCanonicoRepository.save(novo);
+                    });
+        } else {
+            canonico = itemCanonicoRepository.findById(request.itemCanonicoId())
+                    .orElseThrow(() -> new RuntimeException("Material mestre não encontrado: ID " + request.itemCanonicoId()));
+        }
+
+        // 1. Cria ou atualiza o Alias permanente
+        salvarOuAtualizarAlias(
+                canonico, null, itemFila.getDescricaoBruta(),
+                "TREINAMENTO_HISTORICO", null, usuarioNome
+        );
+
+        // 2. Se houver conversão de unidade específica informada pelo usuário, cadastra
+        if (request.cadastrarConversao() && request.fatorConversao() != null && request.fatorConversao().compareTo(BigDecimal.ZERO) > 0) {
+            String uOrig = (itemFila.getUnidadeBruta() != null && !itemFila.getUnidadeBruta().isBlank())
+                    ? itemFila.getUnidadeBruta() : "UN";
+            cadastrarConversaoItem(canonico.getId(), uOrig, canonico.getUnidadePadrao(), request.fatorConversao(), usuarioNome);
+        }
+
+        // 3. Atualiza status na fila
+        itemFila.setStatus("VALIDADO");
+        itemFila.setItemCanonicoEscolhido(canonico);
+        itemFila.setValidadoPor(usuarioNome);
+        itemFila.setDataValidacao(LocalDateTime.now());
+        itemTreinamentoFilaRepository.save(itemFila);
+
+        return obterProximoItemParaTreinar();
+    }
+
+    public EstatisticasTreinamentoDto obterEstatisticasTreinamento() {
+        long pendentes = itemTreinamentoFilaRepository.countByStatus("PENDENTE");
+        long validados = itemTreinamentoFilaRepository.countByStatus("VALIDADO");
+        long ignorados = itemTreinamentoFilaRepository.countByStatus("IGNORADO");
+        long total = pendentes + validados + ignorados;
+        double pct = (total > 0) ? Math.round(((double) (validados + ignorados) / total) * 1000.0) / 10.0 : 0.0;
+
+        return new EstatisticasTreinamentoDto(pendentes, validados, ignorados, total, pct);
     }
 }

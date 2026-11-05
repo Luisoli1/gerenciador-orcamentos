@@ -10,3 +10,4 @@ import java.util.Optional;
 public interface FabricanteRepository extends JpaRepository<Fabricante, Long> {
     Optional<Fabricante> findByNomeIgnoreCase(String nome);
 }
+

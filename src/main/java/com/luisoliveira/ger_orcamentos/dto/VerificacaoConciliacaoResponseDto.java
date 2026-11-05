@@ -11,3 +11,4 @@ public record VerificacaoConciliacaoResponseDto(
         List<SugestaoConciliacaoDto> sugestoes,
         List<DiscrepanciaItemDto> discrepancias
 ) {}
+

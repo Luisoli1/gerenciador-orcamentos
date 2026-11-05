@@ -7,3 +7,4 @@ public record CriarMaterialMestreRequestDto(
         String codigoNcm,
         String codigoReferencia
 ) {}
+

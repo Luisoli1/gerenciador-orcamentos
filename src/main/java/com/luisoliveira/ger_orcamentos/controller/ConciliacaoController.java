@@ -77,10 +77,57 @@ public class ConciliacaoController {
         return ResponseEntity.ok().build();
     }
 
-    // --- 4. CONVERSÕES PADRÃO ---
+    // --- 4. CONVERSÕES DE UNIDADES ---
 
     @GetMapping("/conversoes")
     public ResponseEntity<List<ConversaoPadrao>> listarConversoesPadrao() {
         return ResponseEntity.ok(conciliacaoService.listarConversoesPadrao());
     }
+
+    @PostMapping("/materiais/{id}/conversoes")
+    public ResponseEntity<?> cadastrarConversaoItem(
+            @PathVariable Long id,
+            @RequestBody CadastrarConversaoItemDto dto,
+            Authentication auth) {
+        String usuarioNome = (auth != null) ? auth.getName() : "Usuário";
+        return ResponseEntity.ok(conciliacaoService.cadastrarConversaoItem(
+                id, dto.unidadeOrigem(), dto.unidadeDestino(), dto.fatorMultiplicador(), usuarioNome
+        ));
+    }
+
+    // --- 5. TREINAMENTO DA BASE DE CONHECIMENTO (MODO VALIDAÇÃO EM MASSA) ---
+
+    @GetMapping("/treinamento/proximo")
+    public ResponseEntity<ItemTreinamentoDto> obterProximoItemTreinamento() {
+        ItemTreinamentoDto proximo = conciliacaoService.obterProximoItemParaTreinar();
+        if (proximo == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(proximo);
+    }
+
+    @PostMapping("/treinamento/validar")
+    public ResponseEntity<ItemTreinamentoDto> validarItemTreinamento(
+            @RequestBody ValidarItemTreinamentoRequestDto request,
+            Authentication auth) {
+        String usuarioNome = (auth != null) ? auth.getName() : "Usuário";
+        ItemTreinamentoDto proximo = conciliacaoService.validarItemTreinamento(request, usuarioNome);
+        return ResponseEntity.ok(proximo);
+    }
+
+    @GetMapping("/treinamento/estatisticas")
+    public ResponseEntity<EstatisticasTreinamentoDto> obterEstatisticasTreinamento() {
+        return ResponseEntity.ok(conciliacaoService.obterEstatisticasTreinamento());
+    }
+
+    @PostMapping("/treinamento/enfileirar")
+    public ResponseEntity<Integer> enfileirarItensTreinamento(
+            @RequestBody List<ItemQuadroDTO> itens,
+            @RequestParam(value = "fornecedor", required = false) String fornecedor,
+            @RequestParam(value = "documento", required = false) String documento,
+            @RequestParam(value = "tipoFonte", defaultValue = "ORCAMENTO_HISTORICO") String tipoFonte) {
+        int qtd = conciliacaoService.enfileirarItensLote(itens, fornecedor, documento, tipoFonte);
+        return ResponseEntity.ok(qtd);
+    }
 }
+

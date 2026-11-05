@@ -12,3 +12,4 @@ public interface ConversaoPadraoRepository extends JpaRepository<ConversaoPadrao
     Optional<ConversaoPadrao> findByUnidadeOrigemAndUnidadeDestinoAndAtivoTrue(String unidadeOrigem, String unidadeDestino);
     List<ConversaoPadrao> findByAtivoTrue();
 }
+

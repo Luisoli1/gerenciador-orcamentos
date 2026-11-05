@@ -662,14 +662,8 @@ public class ConciliacaoService {
             if (it.descricao() == null || it.descricao().isBlank()) continue;
             String norm = normalizarTexto(it.descricao());
 
-            // 1. Se já existe como alias ativo para esse fornecedor ou global, não precisa treinar
-            List<ItemAlias> aliases = itemAliasRepository.buscarMelhorMatchAlias(norm, null);
-            if (!aliases.isEmpty()) {
-                continue;
-            }
-
-            // 2. Se já está na fila de treinamento, não duplica
-            if (itemTreinamentoFilaRepository.existsByDescricaoNormalizadaAndFornecedor(norm, fornecedorOrigem)) {
+            // Não duplica apenas se o item já estiver aguardando validação como PENDENTE na fila
+            if (itemTreinamentoFilaRepository.existsByDescricaoNormalizadaAndStatus(norm, "PENDENTE")) {
                 continue;
             }
 

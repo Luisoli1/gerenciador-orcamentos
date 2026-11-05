@@ -27,17 +27,18 @@ public class GeminiClient {
         Media media = new Media(new MimeType("application", "pdf"), resource);
 
         UserMessage mensagem = UserMessage.builder()
-                .text("És um assistente especializado em extração de dados de cotações comerciais em PDF.\n" +
+                .text("És um assistente especializado em engenharia e extração de dados de cotações, pedidos, DANFEs (Notas Fiscais) e catálogos em PDF.\n" +
                         "\n" +
-                        "Analise cuidadosamente TODO o documento PDF anexado, incluindo cabeçalho, tabela de produtos, rodapé e resumo financeiro.\n" +
+                        "Analise cuidadosamente TODO o documento PDF anexado do início ao fim.\n" +
                         "\n" +
-                        "REGRAS GERAIS:\n" +
-                        "- Não invente informações que não estejam presentes no documento.\n" +
-                        "- Não deduza a marca do produto pelo nome do fornecedor.\n" +
-                        "- Se um campo não estiver visível ou seguro, retorne null.\n" +
+                        "DIRETRIZ DE VARREDURA EXAUSTIVA (OBRIGATÓRIO):\n" +
+                        "- Extraia TODAS as linhas de produtos e materiais presentes na tabela ou lista, sem omitir ou resumir nada. Se houver 10, 30, 50 ou 100 itens na tabela, liste TODOS eles no array 'itens'.\n" +
+                        "- Em DANFEs / Notas Fiscais Eletrônicas, leia atentamente a seção 'DADOS DO PRODUTO / SERVIÇO' e extraia cada mercadoria com sua descrição, unidade (UN, PC, M, KG, RL, CX), quantidade e valor unitário.\n" +
+                        "- Em Catálogos ou Manuais técnicos, extraia cada material, código de peça, bitola, chapa ou especificação de tubo/conexão/perfil.\n" +
+                        "- Não invente produtos que não constem no documento.\n" +
                         "- Se não encontrar data de validade, considere 5 dias corridos após a data de emissão.\n" +
-                        "- Preserve os valores monetários exatamente como apresentados no documento.\n" +
-                        "- Mantenha e aplique a correta ortografia e acentuação da língua portuguesa nas descrições dos materiais e produtos (por exemplo: 'Abraçadeira' e não 'Abracadeira', 'Vergalhão' e não 'Vergalhao', 'Aço' e não 'Aco'), preservando rigorosamente todas as medidas, polegadas, bitolas, códigos e números técnicos.\n" +
+                        "- Preserve os valores monetários exatamente como apresentados no documento (se houver).\n" +
+                        "- Mantenha a ortografia correta da língua portuguesa nas descrições técnicas, preservando rigorosamente todas as medidas, polegadas, bitolas, códigos e números técnicos.\n" +
                         "- Retorne APENAS um JSON válido, sem Markdown ou explicações.\n" +
                         "\n" +
                         "ESTRUTURA OBRIGATÓRIA DO JSON:\n" +
@@ -133,18 +134,19 @@ public class GeminiClient {
     }
 
     public String enviarPromptTexto(String textoExtraido, String nomeArquivo) {
-        String prompt = "És um engenheiro e assistente especializado em extração de materiais, cotações comerciais e catálogos técnicos de construção civil (hidráulica, elétrica, fixação, infraestrutura).\n" +
+        String prompt = "És um engenheiro e assistente especializado em extração de materiais, cotações comerciais, pedidos, DANFEs e catálogos técnicos de construção civil (hidráulica, elétrica, fixação, infraestrutura).\n" +
                 "\n" +
-                "Analise cuidadosamente TODO o texto abaixo extraído do arquivo '" + (nomeArquivo != null ? nomeArquivo : "documento.pdf") + "' e extraia todos os produtos/materiais, descrições técnicas completas, unidades e dados do documento.\n" +
+                "Analise minuciosamente TODO o texto abaixo extraído do arquivo '" + (nomeArquivo != null ? nomeArquivo : "documento.pdf") + "' e extraia TODOS os produtos e materiais listados do início ao fim.\n" +
                 "\n" +
-                "REGRAS GERAIS:\n" +
-                "- Quando o documento for um CATÁLOGO, MANUAL TÉCNICO ou LISTA DE PRODUTOS: identifique e extraia TODOS os materiais, tubos, conexões, ferramentas, curvas, perfilados, suportes e peças listados nas tabelas e especificações técnicas. Extraia a descrição técnica completa com diâmetros, polegadas, chapas, bitolas e códigos (ex: 'PERFILADO PERFURADO 38X38X6000MM CHAPA 16', 'TUBO TERMOFUSÃO ACQUA SYSTEM SDR 11 PN 20 25MM', 'ABRAÇADEIRA TIPO D 2 POL COM PARAFUSO').\n" +
-                "- Se o catálogo ou manual não trouxer valores monetários ou quantidades, preencha os valores com null e quantidade com 1.\n" +
-                "- Não deduza a marca do produto pelo nome do fornecedor.\n" +
-                "- Não invente produtos que não estejam mencionados no texto do documento.\n" +
+                "DIRETRIZ DE VARREDURA EXAUSTIVA (OBRIGATÓRIO):\n" +
+                "- Extraia TODAS as linhas de produtos, itens, peças, tubos, conexões, cabos, parafusos, eletrodutos, perfilados e equipamentos da tabela ou lista. É expressamente proibido resumir, agrupar ou omitir itens. Se o documento contiver 10, 30, 50 ou 100 produtos listados, retorne TODOS eles no array 'itens'.\n" +
+                "- O documento pode ser uma Cotação Comercial, um Pedido de Compra, uma DANFE / Nota Fiscal Eletrônica (tabela de 'DADOS DO PRODUTO / SERVIÇO') ou um Catálogo / Manual técnico.\n" +
+                "- Em DANFEs / Notas Fiscais: extraia o nome/especificação da mercadoria da coluna de descrição de produtos, a unidade (UN, PC, M, KG, RL, CX), a quantidade e o valor unitário.\n" +
+                "- Em Catálogos ou Manuais técnicos: identifique e extraia todos os materiais, conexões, bitolas, chapas e peças com suas especificações (ex: 'PERFILADO PERFURADO 38X38X6000MM CHAPA 16', 'TUBO TERMOFUSÃO ACQUA SYSTEM SDR 11 PN 20 25MM'). Se não houver valores monetários no catálogo, retorne null nos valores e 1 na quantidade.\n" +
+                "- Não invente produtos que não constem no texto.\n" +
                 "- Se um campo não estiver visível ou seguro, retorne null.\n" +
-                "- Preserve os valores monetários exatamente como apresentados no texto (se houver).\n" +
-                "- Mantenha e aplique a correta ortografia e acentuação da língua portuguesa nas descrições dos materiais e produtos (por exemplo: 'Abraçadeira' e não 'Abracadeira', 'Vergalhão' e não 'Vergalhao', 'Aço' e não 'Aco'), preservando rigorosamente todas as medidas, polegadas, bitolas, códigos e números técnicos.\n" +
+                "- Preserve os valores monetários e quantidades exatamente como apresentados no documento (se houver).\n" +
+                "- Mantenha a ortografia correta da língua portuguesa nas descrições técnicas, preservando rigorosamente todas as medidas, polegadas, bitolas, códigos e números técnicos.\n" +
                 "- Retorne APENAS um JSON válido, sem Markdown ou explicações.\n" +
                 "\n" +
                 "ESTRUTURA OBRIGATÓRIA DO JSON:\n" +

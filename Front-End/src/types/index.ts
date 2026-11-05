@@ -177,6 +177,8 @@ export interface ConsolidatedQuote {
   valorUnitario: number | null;
   valorTotal: number | null;
   marca?: string;
+  chapa?: string;
+  descricaoOriginal?: string;
   isMelhorUnitario: boolean;
   isMelhorTotal: boolean;
 }
@@ -414,6 +416,7 @@ export interface SugestaoItemTreinamento {
   avisoDivergenciaTecnica?: string;
   motivos?: string[];
   evidencias?: EvidenciaSinal[];
+  origem?: string;
 }
 
 export interface ItemTreinamento {

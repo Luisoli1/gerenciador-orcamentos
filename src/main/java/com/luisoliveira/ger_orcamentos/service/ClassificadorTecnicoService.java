@@ -88,6 +88,70 @@ public class ClassificadorTecnicoService {
     }
 
     /**
+     * PRÉ-FILTRO TÉCNICO OBRIGATÓRIO (PLAUSIBILIDADE):
+     * Impede que materiais de categorias técnicas incompatíveis (ex: Eletroduto vs Cabo, Disjuntor vs Caixa)
+     * cheguem sequer a ser avaliados ou sugeridos ao usuário.
+     */
+    public boolean saoCategoriasIncompativeis(String catA, String catB, String descA, String descB) {
+        String normA = (descA != null) ? normalizar(descA) : "";
+        String normB = (descB != null) ? normalizar(descB) : "";
+
+        // 1. Incompatibilidade semântica direta por palavras-chave fundamentais:
+        boolean aEletroduto = contemQualquer(normA, "ELETRODUTO", "CONDUITE", "CORRUGADO");
+        boolean bEletroduto = contemQualquer(normB, "ELETRODUTO", "CONDUITE", "CORRUGADO");
+
+        boolean aCabo = contemQualquer(normA, "CABO", "FIO", "CONDUTOR");
+        boolean bCabo = contemQualquer(normB, "CABO", "FIO", "CONDUTOR");
+
+        // Eletroduto vs Cabo (NUNCA podem ser equivalentes)
+        if ((aEletroduto && bCabo) || (bEletroduto && aCabo)) {
+            return true;
+        }
+
+        boolean aDisjuntor = contemQualquer(normA, "DISJUNTOR", "DPS", "IDR", "DR");
+        boolean bDisjuntor = contemQualquer(normB, "DISJUNTOR", "DPS", "IDR", "DR");
+
+        boolean aCaixa = contemQualquer(normA, "CAIXA", "CX", "QUADRO", "QDC", "SKYBOX");
+        boolean bCaixa = contemQualquer(normB, "CAIXA", "CX", "QUADRO", "QDC", "SKYBOX");
+
+        // Disjuntor vs Caixa Elétrica
+        if ((aDisjuntor && bCaixa) || (bDisjuntor && aCaixa)) {
+            return true;
+        }
+
+        boolean aPerfilado = contemQualquer(normA, "PERFILADO", "ELETROCALHA", "LEITO");
+        boolean bPerfilado = contemQualquer(normB, "PERFILADO", "ELETROCALHA", "LEITO");
+
+        boolean aIluminacao = contemQualquer(normA, "LED", "LAMPADA", "PAINEL", "PLAFON", "LUMINARIA", "REFLETOR");
+        boolean bIluminacao = contemQualquer(normB, "LED", "LAMPADA", "PAINEL", "PLAFON", "LUMINARIA", "REFLETOR");
+
+        // Perfilado / Eletrocalha vs Iluminação
+        if ((aPerfilado && bIluminacao) || (bPerfilado && aIluminacao)) {
+            return true;
+        }
+
+        boolean aConector = contemQualquer(normA, "CONECTOR", "TERMINAL", "SPLIT BOLT", "PRENSA CABO");
+        boolean bConector = contemQualquer(normB, "CONECTOR", "TERMINAL", "SPLIT BOLT", "PRENSA CABO");
+
+        // Perfilado vs Conector
+        if ((aPerfilado && bConector) || (bPerfilado && aConector)) {
+            return true;
+        }
+
+        // 2. Incompatibilidade por Categoria explícita se ambas estiverem preenchidas e forem conhecidas
+        if (catA != null && catB != null && !catA.isBlank() && !catB.isBlank()) {
+            String ca = normalizar(catA);
+            String cb = normalizar(catB);
+            if (!ca.equals("OUTROS") && !cb.equals("OUTROS") && !ca.equals(cb)) {
+                // Categorias canônicas diferentes são 100% incompatíveis
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * DETECÇÃO COMPLETA DE CONFLITOS DE ATRIBUTOS BLOQUEANTES:
      * Avalia todas as categorias técnicas e retorna a lista de bloqueios que atuam como anti-evidências fortes.
      */
@@ -407,9 +471,37 @@ public class ClassificadorTecnicoService {
         return null;
     }
 
-    private String extrairEspessuraChapa(String texto) {
-        Matcher m = Pattern.compile("\\b(?:CHAPA|#)\\s*(14|16|18|20|22)\\b").matcher(texto);
-        if (m.find()) return "Chapa #" + m.group(1);
+    public String extrairEspessuraChapa(String texto) {
+        if (texto == null) return null;
+
+        // 1. Padrão com CH"16", CH 16, CH.16, CH#16, CHAPA 16, #16
+        Matcher m = Pattern.compile("(?<![A-Z0-9])(?:CHAPA|CH|#)\\s*[\\.\"']?\\s*#?\\s*[\"']?\\s*(12|14|16|18|20|22|24|26)\\b[\"']?").matcher(texto);
+        if (m.find()) {
+            return "Chapa #" + m.group(1);
+        }
+
+        // 2. Cerquilha isolada #16
+        Matcher mHash = Pattern.compile("#\\s*(12|14|16|18|20|22|24|26)\\b").matcher(texto);
+        if (mHash.find()) {
+            return "Chapa #" + mHash.group(1);
+        }
+
+        // 3. Padrão por espessura em milímetros (ex: 1.25mm = #18, 1.50mm = #16, 2.00mm = #14, 0.90mm = #20)
+        Matcher mEsp = Pattern.compile("(?:ESP(?:ESSURA)?|CH(?:APA)?)\\.?\\s*(?:DE\\s*)?(\\d+(?:[,.]\\d+)?)\\s*MM\\b").matcher(texto);
+        if (mEsp.find()) {
+            String valStr = mEsp.group(1).replace(',', '.');
+            try {
+                double val = Double.parseDouble(valStr);
+                if (val >= 1.80 && val <= 2.15) return "Chapa #14";
+                if (val >= 1.40 && val <= 1.65) return "Chapa #16";
+                if (val >= 1.15 && val <= 1.35) return "Chapa #18";
+                if (val >= 0.85 && val <= 1.05) return "Chapa #20";
+                if (val >= 0.70 && val <= 0.84) return "Chapa #22";
+                if (val >= 2.50 && val <= 2.90) return "Chapa #12";
+                return "Chapa " + valStr + "mm";
+            } catch (Exception ignored) {}
+        }
+
         return null;
     }
 
@@ -497,6 +589,12 @@ public class ClassificadorTecnicoService {
         for (String cor : CORES_ELETRICAS) {
             if (Pattern.compile("\\b" + cor + "\\b").matcher(norm).find()) caracteristicas.add("Cor " + capitalizar(cor));
         }
+
+        String chapaDetectada = extrairEspessuraChapa(norm);
+        if (chapaDetectada != null) caracteristicas.add(chapaDetectada);
+
+        String acabDetectado = extrairAcabamentoMetalico(norm);
+        if (acabDetectado != null) caracteristicas.add(acabDetectado);
 
         String fabricanteEncontrado = null;
         for (String fab : FABRICANTES_CONHECIDOS) {

@@ -759,7 +759,7 @@ public class ConciliacaoService {
         }
 
         List<ItemCanonico> materiais = itemCanonicoRepository.findByAtivoTrueOrderByDescricaoPadraoAsc();
-        List<SugestaoItemTreinamentoDto> sugestoes = gerarTopSugestoes(itemFila.getDescricaoNormalizada(), materiais);
+        List<SugestaoItemTreinamentoDto> sugestoes = gerarTopSugestoes(itemFila.getDescricaoBruta(), itemFila.getCategoriaSugerida(), itemFila.getDescricaoNormalizada(), materiais);
 
         List<String> appsSug = (itemFila.getAplicacoesSugeridas() != null && !itemFila.getAplicacoesSugeridas().isBlank())
                 ? Arrays.stream(itemFila.getAplicacoesSugeridas().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
@@ -786,43 +786,58 @@ public class ConciliacaoService {
         );
     }
 
-    private List<SugestaoItemTreinamentoDto> gerarTopSugestoes(String normItem, List<ItemCanonico> materiais) {
+    private List<SugestaoItemTreinamentoDto> gerarTopSugestoes(String descBruta, String catSugerida, String normItem, List<ItemCanonico> materiais) {
         List<SugestaoItemTreinamentoDto> lista = new ArrayList<>();
 
         for (ItemCanonico mat : materiais) {
+            // 1. PRÉ-FILTRO TÉCNICO OBRIGATÓRIO (PLAUSIBILIDADE):
+            // Descarta imediatamente materiais de categorias incompatíveis (ex: Eletroduto vs Cabo, Disjuntor vs Caixa)
+            if (classificadorTecnicoService.saoCategoriasIncompativeis(catSugerida, mat.getCategoria(), descBruta, mat.getDescricaoPadrao())) {
+                continue;
+            }
+
             ResultadoAvaliacaoEvidenciasDto aval = motorEvidenciasService.avaliarEvidencias(
                     normItem, mat.getUnidadePadrao(), null,
                     null, null, mat, BigDecimal.ONE,
                     false, false, null
             );
 
-            if (aval.confianca() >= 35 || aval.alertaConflito() != null) {
-                List<String> appsList = (mat.getAplicacoes() != null && !mat.getAplicacoes().isBlank())
-                        ? Arrays.stream(mat.getAplicacoes().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
-                        : List.of();
-                List<String> caracList = (mat.getCaracteristicas() != null && !mat.getCaracteristicas().isBlank())
-                        ? Arrays.stream(mat.getCaracteristicas().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
-                        : List.of();
-
-                String justificativa = !aval.motivos().isEmpty()
-                        ? String.join(" • ", aval.motivos())
-                        : "Similaridade de especificações (" + aval.confianca() + "%).";
-
-                lista.add(new SugestaoItemTreinamentoDto(
-                        mat.getId(),
-                        mat.getDescricaoPadrao(),
-                        mat.getUnidadePadrao(),
-                        mat.getCategoria(),
-                        mat.getSubcategoria(),
-                        appsList,
-                        caracList,
-                        aval.confianca(),
-                        justificativa,
-                        aval.alertaConflito(),
-                        aval.motivos(),
-                        aval.evidencias()
-                ));
+            // 2. LIMIAR MÍNIMO ESTRITO (THRESHOLD >= 30%):
+            // - Descarta se houver conflito técnico bloqueante
+            // - Descarta se a pontuação for < 30%
+            if (aval.alertaConflito() != null || aval.confianca() < 30) {
+                continue;
             }
+
+            List<String> appsList = (mat.getAplicacoes() != null && !mat.getAplicacoes().isBlank())
+                    ? Arrays.stream(mat.getAplicacoes().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
+                    : List.of();
+            List<String> caracList = (mat.getCaracteristicas() != null && !mat.getCaracteristicas().isBlank())
+                    ? Arrays.stream(mat.getCaracteristicas().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList()
+                    : List.of();
+
+            String justificativa = !aval.motivos().isEmpty()
+                    ? String.join(" • ", aval.motivos())
+                    : "Similaridade de especificações (" + aval.confianca() + "%).";
+
+            String origem = (mat.getOrigem() != null && !mat.getOrigem().isBlank())
+                    ? mat.getOrigem() : "Catálogo Mestre";
+
+            lista.add(new SugestaoItemTreinamentoDto(
+                    mat.getId(),
+                    mat.getDescricaoPadrao(),
+                    mat.getUnidadePadrao(),
+                    mat.getCategoria(),
+                    mat.getSubcategoria(),
+                    appsList,
+                    caracList,
+                    aval.confianca(),
+                    justificativa,
+                    null,
+                    aval.motivos(),
+                    aval.evidencias(),
+                    origem
+            ));
         }
 
         lista.sort(Comparator.comparingInt(SugestaoItemTreinamentoDto::confianca).reversed());
@@ -862,6 +877,13 @@ public class ConciliacaoService {
                         novo.setAplicacoes((request.aplicacoes() != null && !request.aplicacoes().isBlank()) ? request.aplicacoes() : String.join(", ", extraida.aplicacoes()));
                         novo.setCaracteristicas((request.caracteristicas() != null && !request.caracteristicas().isBlank()) ? request.caracteristicas() : String.join(", ", extraida.caracteristicas()));
                         novo.setCodigoNcm(request.codigoNcm());
+                        String origemReg = "Catálogo Mestre";
+                        if (itemFila.getTipoFonte() != null) {
+                            if (itemFila.getTipoFonte().contains("ORCAMENTO")) origemReg = "Orçamento Histórico";
+                            else if (itemFila.getTipoFonte().contains("CATALOGO")) origemReg = "Catálogo Fabricante";
+                            else if (itemFila.getTipoFonte().contains("PDF")) origemReg = "PDF Importado";
+                        }
+                        novo.setOrigem(origemReg);
                         return itemCanonicoRepository.save(novo);
                     });
         } else {

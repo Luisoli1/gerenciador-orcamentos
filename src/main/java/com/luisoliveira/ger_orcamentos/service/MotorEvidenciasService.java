@@ -95,6 +95,23 @@ public class MotorEvidenciasService {
         int pontosAcumulados = 0;
 
         // -------------------------------------------------------------
+        // PRÉ-FILTRO TÉCNICO OBRIGATÓRIO (PLAUSIBILIDADE):
+        // Se pertencerem a categorias incompatíveis (ex: Eletroduto vs Cabo, Disjuntor vs Caixa, Perfilado vs Conector),
+        // descarta imediatamente com 0% de confiança para nunca poluir o ranking de sugestões.
+        // -------------------------------------------------------------
+        if (classificadorTecnicoService.saoCategoriasIncompativeis(null, canonico.getCategoria(), descricaoItem, canonico.getDescricaoPadrao())) {
+            return new ResultadoAvaliacaoEvidenciasDto(
+                    canonico.getId(),
+                    canonico.getDescricaoPadrao(),
+                    canonico.getUnidadePadrao(),
+                    0,
+                    List.of(new EvidenciaSinalDto("INCOMPATIBILIDADE_CATEGORIA", "Incompatibilidade Técnica", "Categorias técnicas estruturalmente incompatíveis", -100, false)),
+                    List.of("⛔ Incompatibilidade técnica de categoria"),
+                    "Incompatibilidade técnica de categoria."
+            );
+        }
+
+        // -------------------------------------------------------------
         // EVIDÊNCIA 1: Alias / Sinônimo previamente validado no histórico
         // -------------------------------------------------------------
         List<ItemAlias> aliases = itemAliasRepository.buscarMelhorMatchAlias(normA, fornecedorId);
@@ -304,6 +321,16 @@ public class MotorEvidenciasService {
         List<EvidenciaSinalDto> evidencias = new ArrayList<>();
         List<String> motivos = new ArrayList<>();
         int pontos = 0;
+
+        // Pré-filtro técnico obrigatório (plausibilidade):
+        if (classificadorTecnicoService.saoCategoriasIncompativeis(null, null, descA, descB)) {
+            return new ResultadoAvaliacaoEvidenciasDto(
+                    null, descA, uA, 0,
+                    List.of(new EvidenciaSinalDto("INCOMPATIBILIDADE_CATEGORIA", "Incompatibilidade Técnica", "Categorias técnicas estruturalmente incompatíveis", -100, false)),
+                    List.of("⛔ Incompatibilidade técnica"),
+                    "Incompatibilidade técnica de categoria."
+            );
+        }
 
         // 1. Quantidade Física Idêntica
         boolean qtdIgual = false;

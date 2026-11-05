@@ -1,4 +1,4 @@
-﻿import type { QuadroConcorrenciaDto, ConsolidatedItem, ItemQuadroDTO } from '../types';
+import type { QuadroConcorrenciaDto, ConsolidatedItem, ItemQuadroDTO } from '../types';
 
 export function normalizeDescription(text: string): string {
   if (!text) return '';
@@ -18,11 +18,47 @@ function extractTokens(text: string): string[] {
   return normalizeDescription(text).split(' ').filter(t => t.length > 0);
 }
 
+export function extrairChapa(text: string): string | null {
+  if (!text) return null;
+  const upper = text.toUpperCase();
+
+  // 1. Padrão com CH"16", CH 16, CH.16, CH#16, CHAPA 16, #16
+  const match = upper.match(/(?:CHAPA|CH|#)\s*[\."']?\s*#?\s*["']?\s*(12|14|16|18|20|22|24|26)\b["']?/);
+  if (match) return `Chapa #${match[1]}`;
+
+  // 2. Cerquilha isolada #16
+  const matchHash = upper.match(/#\s*(12|14|16|18|20|22|24|26)\b/);
+  if (matchHash) return `Chapa #${matchHash[1]}`;
+
+  // 3. Milímetros (1.25mm -> #18, 1.5mm -> #16, 2.0mm -> #14, 0.9mm -> #20)
+  const matchEsp = upper.match(/(?:ESP(?:ESSURA)?|CH(?:APA)?)\.?\s*(?:DE\s*)?(\d+(?:[,\.]\d+)?)\s*MM\b/);
+  if (matchEsp) {
+    const val = parseFloat(matchEsp[1].replace(',', '.'));
+    if (val >= 1.8 && val <= 2.15) return 'Chapa #14';
+    if (val >= 1.4 && val <= 1.65) return 'Chapa #16';
+    if (val >= 1.15 && val <= 1.35) return 'Chapa #18';
+    if (val >= 0.85 && val <= 1.05) return 'Chapa #20';
+    if (val >= 0.7 && val <= 0.84) return 'Chapa #22';
+    if (val >= 2.5 && val <= 2.9) return 'Chapa #12';
+    return `Chapa ${val}mm`;
+  }
+
+  return null;
+}
+
 export function areItemsEquivalent(descA: string, descB: string): boolean {
   const normA = normalizeDescription(descA);
   const normB = normalizeDescription(descB);
 
   if (normA === normB) return true;
+
+  // BLOQUEIO CRÍTICO DE INFRAESTRUTURA: ESPESSURA DE CHAPA (#14, #16, #18, #20...)
+  // Não mescla chapas diferentes na mesma linha silenciosamente!
+  const chapaA = extrairChapa(descA);
+  const chapaB = extrairChapa(descB);
+  if (chapaA && chapaB && chapaA !== chapaB) {
+    return false;
+  }
 
   const tokensA = extractTokens(descA);
   const tokensB = extractTokens(descB);
@@ -94,6 +130,8 @@ export function consolidateQuadro(orcamentos: QuadroConcorrenciaDto[]): Consolid
         valorUnitario: vu,
         valorTotal: vt,
         marca: match?.marca || '',
+        chapa: match?.descricao ? (extrairChapa(match.descricao) || undefined) : undefined,
+        descricaoOriginal: match?.descricao || '',
         isMelhorUnitario: false,
         isMelhorTotal: false,
       });

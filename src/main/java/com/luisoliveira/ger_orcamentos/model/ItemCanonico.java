@@ -50,6 +50,9 @@ public class ItemCanonico implements Serializable {
     @Column(name = "criado_por", length = 100)
     private String criadoPor;
 
+    @Column(name = "origem", length = 50)
+    private String origem = "Catálogo Mestre";
+
     public ItemCanonico() {}
 
     public ItemCanonico(String descricaoPadrao, String descricaoNormalizada, String unidadePadrao, String categoria, String criadoPor) {
@@ -164,6 +167,14 @@ public class ItemCanonico implements Serializable {
 
     public void setCriadoPor(String criadoPor) {
         this.criadoPor = criadoPor;
+    }
+
+    public String getOrigem() {
+        return (origem != null && !origem.isBlank()) ? origem : "Catálogo Mestre";
+    }
+
+    public void setOrigem(String origem) {
+        this.origem = origem;
     }
 
     @Override

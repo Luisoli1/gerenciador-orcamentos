@@ -834,46 +834,62 @@ export function CatalogoMateriaisView() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-2.5">
-                  {itemTreinando.sugestoes.map((sug, idx) => (
-                    <div
-                      key={sug.itemCanonicoId}
-                      onClick={() => {
-                        setOpcaoTreino('sugestao');
-                        setSugestaoEscolhidaIdx(idx);
-                      }}
-                      className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
-                        opcaoTreino === 'sugestao' && sugestaoEscolhidaIdx === idx
-                          ? 'bg-amber-500/10 border-amber-500 shadow-lg shadow-amber-500/5'
-                          : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3 flex-1">
-                        <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs border shrink-0 mt-0.5 ${
+                  {itemTreinando.sugestoes.length === 0 ? (
+                    <div className="p-5 bg-slate-900/40 border border-slate-800 rounded-2xl text-center space-y-1.5 py-6">
+                      <div className="w-9 h-9 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-center mx-auto text-slate-400">
+                        <Database className="w-4 h-4 text-amber-400/80" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-200">
+                        Nenhum material correspondente encontrado no Catálogo Mestre
+                      </p>
+                      <p className="text-xs text-slate-400 max-w-lg mx-auto">
+                        O Motor de Evidências descartou sugestões incompatíveis e não identificou nenhum candidato plausível (≥ 30% Match) na base corporativa. Cadastre este item abaixo como um novo Molde Mestre.
+                      </p>
+                    </div>
+                  ) : (
+                    itemTreinando.sugestoes.map((sug, idx) => (
+                      <div
+                        key={sug.itemCanonicoId}
+                        onClick={() => {
+                          setOpcaoTreino('sugestao');
+                          setSugestaoEscolhidaIdx(idx);
+                        }}
+                        className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
                           opcaoTreino === 'sugestao' && sugestaoEscolhidaIdx === idx
-                            ? 'bg-amber-500 text-slate-950 border-amber-500'
-                            : 'bg-slate-800 text-slate-400 border-slate-700'
-                        }`}>
-                          {idx + 1}
-                        </span>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-sm text-slate-100">
-                              {sug.descricaoPadrao}
-                            </span>
-                            <span className="px-1.5 py-0.5 bg-slate-800 text-slate-400 text-[10px] font-mono rounded">
-                              {sug.unidadePadrao}
-                            </span>
-                            {sug.categoria && (
-                              <span className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-300 text-[10px] rounded border border-indigo-500/20">
-                                {sug.categoria}
+                            ? 'bg-amber-500/10 border-amber-500 shadow-lg shadow-amber-500/5'
+                            : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3 flex-1">
+                          <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs border shrink-0 mt-0.5 ${
+                            opcaoTreino === 'sugestao' && sugestaoEscolhidaIdx === idx
+                              ? 'bg-amber-500 text-slate-950 border-amber-500'
+                              : 'bg-slate-800 text-slate-400 border-slate-700'
+                          }`}>
+                            {idx + 1}
+                          </span>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-sm text-slate-100">
+                                {sug.descricaoPadrao}
                               </span>
-                            )}
-                            {sug.subcategoria && (
-                              <span className="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-300 text-[10px] rounded border border-cyan-500/20">
-                                {sug.subcategoria}
+                              <span className="px-1.5 py-0.5 bg-slate-800 text-slate-400 text-[10px] font-mono rounded">
+                                {sug.unidadePadrao}
                               </span>
-                            )}
-                          </div>
+                              {sug.categoria && (
+                                <span className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-300 text-[10px] rounded border border-indigo-500/20">
+                                  {sug.categoria}
+                                </span>
+                              )}
+                              {sug.subcategoria && (
+                                <span className="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-300 text-[10px] rounded border border-cyan-500/20">
+                                  {sug.subcategoria}
+                                </span>
+                              )}
+                              <span className="px-2 py-0.5 bg-blue-500/10 text-blue-300 text-[10px] rounded border border-blue-500/20 font-medium">
+                                Origem: {sug.origem || 'Catálogo Mestre'}
+                              </span>
+                            </div>
                           
                           <span className="text-xs text-slate-400 block">
                             {sug.justificativa}
@@ -928,7 +944,8 @@ export function CatalogoMateriaisView() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                  ))
+                )}
 
                   {/* OPÇÃO: CRIAR NOVO MATERIAL MESTRE */}
                   <div

@@ -1729,7 +1729,30 @@ Equipe de Suprimentos - Makinsthal`;
                             className="w-full px-2 py-1 bg-slate-950 border border-slate-700 focus:border-blue-500 rounded text-xs text-slate-100 font-sans"
                           />
                         ) : (
-                          item.descricao
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{item.descricao}</span>
+                            {(() => {
+                              const chapas = Array.from(new Set(item.quotes.map(q => q.chapa).filter(Boolean)));
+                              if (chapas.length > 1) {
+                                return (
+                                  <span 
+                                    title={`Atenção Técnica: Cotações com chapas diferentes! (${chapas.join(' vs ')})`}
+                                    className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                  >
+                                    <AlertTriangle className="w-3 h-3 text-amber-400" />
+                                    Chapas: {chapas.join(' vs ')}
+                                  </span>
+                                );
+                              } else if (chapas.length === 1) {
+                                return (
+                                  <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                                    {chapas[0]}
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
                         )}
                       </td>
 
@@ -1766,7 +1789,7 @@ Equipe de Suprimentos - Makinsthal`;
                       {/* Valores Cotados por Cada Fornecedor */}
                       {item.quotes.map((q, qIdx) => (
                         <React.Fragment key={qIdx}>
-                          {/* Marca */}
+                          {/* Marca e Chapa */}
                           <td className="p-2 text-center text-slate-400 border-r border-slate-800 text-[11px]">
                             {modoEdicao ? (
                               <input
@@ -1777,7 +1800,14 @@ Equipe de Suprimentos - Makinsthal`;
                                 className="w-16 px-1 py-1 bg-slate-950 border border-slate-700 focus:border-blue-500 rounded text-center text-[11px] text-slate-300 font-sans"
                               />
                             ) : (
-                              q.marca || '-'
+                              <div className="flex flex-col items-center justify-center gap-0.5">
+                                <span>{q.marca || '-'}</span>
+                                {q.chapa && (
+                                  <span className="text-[9px] font-mono font-medium text-amber-300 bg-amber-500/15 px-1 py-0.2 rounded border border-amber-500/30">
+                                    {q.chapa}
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </td>
 

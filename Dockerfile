@@ -14,7 +14,7 @@ COPY --from=builder /app/target/ger-orcamentos-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8080
 
 # Otimização de memória para planos gratuitos (512MB RAM)
-ENV JAVA_OPTS="-XX:+UseSerialGC -Xmx350m -Xms150m -XX:MaxRAMPercentage=75.0"
+ENV JAVA_OPTS="-XX:+UseSerialGC -Xmx320m -Xms128m -XX:MaxMetaspaceSize=128m -XX:+ExitOnOutOfMemoryError"
 
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
 

@@ -107,6 +107,19 @@ export function CatalogoMateriaisView() {
   const [loteTipoFonte, setLoteTipoFonte] = useState<'ORCAMENTO_HISTORICO' | 'CATALOGO_FABRICANTE'>('ORCAMENTO_HISTORICO');
   const [enfileirandoLote, setEnfileirandoLote] = useState(false);
 
+  const inferirUnidadePadrao = (desc: string, cat?: string, uBruta?: string): string => {
+    const norm = (desc + ' ' + (cat || '')).toLowerCase();
+    if (norm.includes('caixa') || norm.includes('quadro') || norm.includes('skybox') || 
+        norm.includes('disjuntor') || norm.includes('ilumina') || norm.includes('lampada') ||
+        norm.includes('luminaria') || norm.includes('tomada') || norm.includes('interruptor') ||
+        norm.includes('conector') || norm.includes('tampa') || norm.includes('curva') || norm.includes('luva')) {
+      if (!uBruta || uBruta.toUpperCase() === 'M' || uBruta.toUpperCase() === 'METRO') {
+        return 'UN';
+      }
+    }
+    return uBruta || 'UN';
+  };
+
   // Carregamento de Dados Gerais com fallback resiliente para evitar falsos erros
   const carregarDados = async () => {
     setLoading(true);
@@ -131,6 +144,32 @@ export function CatalogoMateriaisView() {
     }
   };
 
+  // Zerar Dados de Teste da Base (Clean Slate para Produção)
+  const handleZerarBaseDeTestes = async () => {
+    const confirmacao = window.confirm(
+      '⚠️ ATENÇÃO: ZERAR DADOS DE TESTE DA BASE?\n\n' +
+      'Esta ação irá:\n' +
+      '• Remover os 9 materiais de teste iniciais\n' +
+      '• Limpar a fila de treinamento atual\n\n' +
+      'Assim, o Catálogo Mestre ficará 100% puro para receber apenas os orçamentos e catálogos reais que você subir.\n\n' +
+      'Deseja prosseguir?'
+    );
+    if (!confirmacao) return;
+
+    try {
+      setLoading(true);
+      const resp = await api.zerarBaseTreinamentoETeste();
+      setSucesso(resp.message || 'Base de testes limpa com sucesso! O catálogo agora está pronto para receber seus documentos reais.');
+      await carregarDados();
+      await carregarFilaTreinamento();
+      setTimeout(() => setSucesso(null), 7000);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Erro ao zerar base de testes.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Carregamento da Fila de Treinamento
   const carregarFilaTreinamento = useCallback(async () => {
     try {
@@ -147,7 +186,7 @@ export function CatalogoMateriaisView() {
         setMaterialExistenteId('');
         setFiltroMaterialTreino('');
         setNovoTreinoDescricao(proximo.descricaoBruta);
-        setNovoTreinoUnidade(proximo.unidadeBruta || 'UN');
+        setNovoTreinoUnidade(inferirUnidadePadrao(proximo.descricaoBruta, proximo.categoriaSugerida, proximo.unidadeBruta));
         setNovoTreinoCategoria(proximo.categoriaSugerida || '');
         setNovoTreinoSubcategoria(proximo.subcategoriaSugerida || '');
         setNovoTreinoAplicacoes(proximo.aplicacoesSugeridas?.join(', ') || '');
@@ -503,7 +542,7 @@ export function CatalogoMateriaisView() {
         setMaterialExistenteId('');
         setFiltroMaterialTreino('');
         setNovoTreinoDescricao(proximo.descricaoBruta);
-        setNovoTreinoUnidade(proximo.unidadeBruta || 'UN');
+        setNovoTreinoUnidade(inferirUnidadePadrao(proximo.descricaoBruta, proximo.categoriaSugerida, proximo.unidadeBruta));
         setNovoTreinoCategoria(proximo.categoriaSugerida || '');
         setNovoTreinoSubcategoria(proximo.subcategoriaSugerida || '');
         setNovoTreinoAplicacoes(proximo.aplicacoesSugeridas?.join(', ') || '');
@@ -579,6 +618,15 @@ export function CatalogoMateriaisView() {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Atualizar
+          </button>
+
+          <button
+            onClick={handleZerarBaseDeTestes}
+            title="Limpar materiais de teste e começar com a base 100% pura"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800/80 hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 border border-slate-700/60 hover:border-rose-800/60 rounded-xl transition shadow-sm font-semibold text-xs"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-400/80" />
+            Zerar Dados Teste
           </button>
 
           {activeTab === 'materiais' && (

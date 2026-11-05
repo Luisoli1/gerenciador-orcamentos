@@ -923,4 +923,24 @@ public class ConciliacaoService {
 
         return new EstatisticasTreinamentoDto(pendentes, validados, ignorados, total, pct);
     }
+
+    @Transactional
+    public void deletarMaterialMestre(Long id, String usuarioNome) {
+        ItemCanonico item = itemCanonicoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Material mestre não encontrado: ID " + id));
+        item.setAtivo(false);
+        itemCanonicoRepository.save(item);
+        if (auditoriaService != null) {
+            auditoriaService.registrar("EXCLUSAO", "MATERIAL_MESTRE", id.toString(), "Material inativado: " + item.getDescricaoPadrao(), null);
+        }
+    }
+
+    @Transactional
+    public void zerarDadosTeste() {
+        itemTreinamentoFilaRepository.deleteAll();
+        itemConversaoUnidadeRepository.deleteAll();
+        itemAliasRepository.deleteAll();
+        itemCanonicoRepository.deleteAll();
+        System.out.println("BASE DE CONCILIAÇÃO E TREINAMENTO ZERADA PARA INÍCIO LIMPO.");
+    }
 }

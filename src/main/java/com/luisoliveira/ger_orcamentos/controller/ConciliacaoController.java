@@ -64,6 +64,21 @@ public class ConciliacaoController {
         return ResponseEntity.ok(conciliacaoService.criarMaterialMestre(dto, usuarioNome));
     }
 
+    @DeleteMapping("/materiais/{id}")
+    public ResponseEntity<Void> deletarMaterialMestre(
+            @PathVariable Long id,
+            Authentication auth) {
+        String usuarioNome = (auth != null) ? auth.getName() : "Usuário";
+        conciliacaoService.deletarMaterialMestre(id, usuarioNome);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/base/zerar-dados-teste")
+    public ResponseEntity<?> zerarDadosTeste() {
+        conciliacaoService.zerarDadosTeste();
+        return ResponseEntity.ok(java.util.Map.of("message", "Base de treinamento e catálogo mestre zerados com sucesso."));
+    }
+
     // --- 3. DETECÇÃO DE DISCREPÂNCIAS E CONFIRMAÇÃO ---
 
     @PostMapping("/verificar-discrepancias")

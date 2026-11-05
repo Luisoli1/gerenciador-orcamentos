@@ -451,6 +451,15 @@ export const api = {
     const res = await axios.post(`${API_BASE_URL}/auth/recuperar-dono`);
     return res.data;
   },
+
+  deletarMaterialMestre: async (id: number): Promise<void> => {
+    await axios.delete(`${API_BASE_URL}/conciliacao/materiais/${id}`);
+  },
+
+  zerarBaseTreinamentoETeste: async (): Promise<{ message: string }> => {
+    const res = await axios.post(`${API_BASE_URL}/conciliacao/base/zerar-dados-teste`);
+    return res.data;
+  },
 };
 
 export default api;

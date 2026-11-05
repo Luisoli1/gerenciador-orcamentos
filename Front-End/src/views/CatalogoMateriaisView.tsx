@@ -96,6 +96,7 @@ export function CatalogoMateriaisView() {
   const [modalLoteAberto, setModalLoteAberto] = useState(false);
   const [modoImportacao, setModoImportacao] = useState<'pdf' | 'manual'>('pdf');
   const [arquivosPdf, setArquivosPdf] = useState<File[]>([]);
+  const [progressoPdf, setProgressoPdf] = useState<{ atual: number; total: number; nomeAtual: string } | null>(null);
   const [loteTexto, setLoteTexto] = useState('');
   const [loteFornecedor, setLoteFornecedor] = useState('');
   const [loteDocumento, setLoteDocumento] = useState('');
@@ -305,7 +306,7 @@ export function CatalogoMateriaisView() {
     }
   };
 
-  // Enfileirar via Upload de Múltiplos PDFs com IA Gemini
+  // Enfileirar via Upload de Múltiplos PDFs com IA Gemini - Processamento Resiliente Arquivo a Arquivo
   const handleUploadPdfsTreinamento = async (e: React.FormEvent) => {
     e.preventDefault();
     if (arquivosPdf.length === 0) {
@@ -314,30 +315,58 @@ export function CatalogoMateriaisView() {
     }
 
     setEnfileirandoLote(true);
-    try {
-      const resp = await api.uploadPdfsTreinamento(
-        arquivosPdf,
-        loteTipoFonte,
-        loteFornecedor.trim() || undefined,
-        loteDocumento.trim() || undefined
-      );
+    let totalProcessados = 0;
+    let totalItens = 0;
+    let totalNovos = 0;
+    const errosOcorridos: string[] = [];
 
-      let msg = `${resp.totalItensEnfileirados} itens extraídos via IA e enfileirados com sucesso! (${resp.totalArquivosProcessados} PDF(s) processados).`;
-      if (resp.erros && resp.erros.length > 0) {
-        msg += ` Atenção: ${resp.erros.join(', ')}`;
+    try {
+      for (let i = 0; i < arquivosPdf.length; i++) {
+        const file = arquivosPdf[i];
+        setProgressoPdf({
+          atual: i + 1,
+          total: arquivosPdf.length,
+          nomeAtual: file.name
+        });
+
+        try {
+          // Envia um arquivo por vez: evita estouro de timeout do Vercel/Render e economiza memória
+          const resp = await api.uploadPdfsTreinamento(
+            [file],
+            loteTipoFonte,
+            loteFornecedor.trim() || undefined,
+            loteDocumento.trim() || undefined
+          );
+
+          totalProcessados += (resp.totalArquivosProcessados || 1);
+          totalItens += (resp.totalItensExtraidos || 0);
+          totalNovos += (resp.totalNovosEnfileirados || 0);
+        } catch (itemErr: any) {
+          console.error(`Erro ao processar ${file.name}:`, itemErr);
+          const msgErro = itemErr?.response?.data?.message || itemErr?.message || 'Falha de comunicação/timeout';
+          errosOcorridos.push(`${file.name}: ${msgErro}`);
+        }
       }
-      setSucesso(msg);
-      setModalLoteAberto(false);
-      setArquivosPdf([]);
-      setLoteTexto('');
-      setLoteFornecedor('');
-      setLoteDocumento('');
-      setTimeout(() => setSucesso(null), 5000);
-      await carregarFilaTreinamento();
-    } catch (err: any) {
-      alert(err?.response?.data?.message || 'Erro ao processar PDFs com IA.');
+
+      if (totalProcessados > 0) {
+        let msg = `Concluído! ${totalProcessados} de ${arquivosPdf.length} PDF(s) processados com sucesso. ${totalItens} itens identificados pela IA (${totalNovos} novos itens adicionados à fila de treinamento).`;
+        if (errosOcorridos.length > 0) {
+          msg += ` Atenção: ${errosOcorridos.length} arquivo(s) tiveram avisos: ${errosOcorridos.join('; ')}`;
+        }
+        setSucesso(msg);
+        setModalLoteAberto(false);
+        setArquivosPdf([]);
+        setLoteTexto('');
+        setLoteFornecedor('');
+        setLoteDocumento('');
+        setTimeout(() => setSucesso(null), 6000);
+        await carregarFilaTreinamento();
+      } else {
+        alert(`Não foi possível processar os PDFs selecionados.\n\nDetalhes:\n${errosOcorridos.join('\n') || 'Verifique se o backend no Render já concluiu a reinicialização da versão atualizada.'}`);
+      }
     } finally {
       setEnfileirandoLote(false);
+      setProgressoPdf(null);
     }
   };
 
@@ -1588,6 +1617,36 @@ export function CatalogoMateriaisView() {
                   />
                   <p className="text-[11px] text-slate-500">
                     Dica: Cada linha será enfileirada individualmente com similaridade semântica e atributos técnicos pré-calculados.
+                  </p>
+                </div>
+              )}
+
+              {/* PROGRESSO EM TEMPO REAL ARQUIVO A ARQUIVO */}
+              {enfileirandoLote && progressoPdf && (
+                <div className="p-4 bg-slate-950/80 border border-amber-500/30 rounded-2xl space-y-2.5 animate-in fade-in">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-amber-300 flex items-center gap-2">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Analisando PDF {progressoPdf.atual} de {progressoPdf.total} com IA Gemini
+                    </span>
+                    <span className="font-mono font-bold text-amber-400">
+                      {Math.round((progressoPdf.atual / progressoPdf.total) * 100)}%
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-300 truncate font-mono bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
+                    📄 {progressoPdf.nomeAtual}
+                  </p>
+
+                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-amber-500 to-emerald-500 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${Math.round((progressoPdf.atual / progressoPdf.total) * 100)}%` }}
+                    />
+                  </div>
+
+                  <p className="text-[11px] text-slate-400">
+                    Processamento individual para evitar quedas de conexão ou limite de tempo na nuvem.
                   </p>
                 </div>
               )}

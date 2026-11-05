@@ -40,6 +40,16 @@ public class AuthController {
         }
     }
 
+    @PostMapping("/recuperar-dono")
+    public ResponseEntity<?> recuperarDono() {
+        usuarioService.resetarSenhaDonoPadrao();
+        return ResponseEntity.ok(Map.of(
+                "message", "Senha de Administrador Dono resetada com sucesso!",
+                "email", "admin@makinsthal.com.br",
+                "senhaPadrao", "Makinsthal@2026!"
+        ));
+    }
+
     @GetMapping("/me")
     public ResponseEntity<?> me(Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {

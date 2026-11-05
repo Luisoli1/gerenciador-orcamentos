@@ -28,7 +28,22 @@ public class UsuarioService {
 
     @PostConstruct
     public void inicializarDonoPadrao() {
-        if (usuarioRepository.count() == 0) {
+        resetarSenhaDonoPadrao();
+    }
+
+    public void resetarSenhaDonoPadrao() {
+        List<Usuario> todos = usuarioRepository.findAll();
+        boolean resetou = false;
+        for (Usuario u : todos) {
+            if (u.getRole() == Role.DONO || "admin@makinsthal.com.br".equalsIgnoreCase(u.getEmail())) {
+                u.setSenha(passwordEncoder.encode("Makinsthal@2026!"));
+                u.setAtivo(true);
+                usuarioRepository.save(u);
+                resetou = true;
+                System.out.println("SENHA DO DONO MASTER RESETADA COM SUCESSO: " + u.getEmail() + " -> Makinsthal@2026!");
+            }
+        }
+        if (!resetou) {
             Usuario dono = new Usuario();
             dono.setNome("Administrador Dono");
             dono.setEmail("admin@makinsthal.com.br");
@@ -36,9 +51,7 @@ public class UsuarioService {
             dono.setRole(Role.DONO);
             dono.setAtivo(true);
             usuarioRepository.save(dono);
-            System.out.println("===========================================================");
-            System.out.println("USUÁRIO DONO INICIAL CRIADO: admin@makinsthal.com.br / Makinsthal@2026!");
-            System.out.println("===========================================================");
+            System.out.println("NOVO USUÁRIO DONO CRIADO: admin@makinsthal.com.br -> Makinsthal@2026!");
         }
     }
 

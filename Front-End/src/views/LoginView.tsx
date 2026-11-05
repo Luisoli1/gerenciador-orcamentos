@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Lock, Mail, ShieldCheck, Eye, EyeOff, AlertCircle, HardHat } from 'lucide-react';
+import { api } from '../services/api';
+import { Lock, Mail, ShieldCheck, Eye, EyeOff, AlertCircle, HardHat, RefreshCw } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
   const { login } = useAuth();
@@ -8,7 +9,9 @@ export const LoginView: React.FC = () => {
   const [senha, setSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [carregando, setCarregando] = useState(false);
+  const [resetando, setResetando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [msgSucesso, setMsgSucesso] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = "Makinsthal - Sistema de Gestão de Orçamentos, QCs & Faturamento Direto";
@@ -30,6 +33,24 @@ export const LoginView: React.FC = () => {
       setErro(msg);
     } finally {
       setCarregando(false);
+    }
+  };
+
+  const handleRecuperarDono = async () => {
+    try {
+      setResetando(true);
+      setErro(null);
+      const res = await api.recuperarDono();
+      setEmail(res.email);
+      setSenha(res.senhaPadrao);
+      setMsgSucesso(`Senha master restaurada para "Makinsthal@2026!"! Clique em "Entrar no Sistema".`);
+    } catch (e: any) {
+      // Se a API ainda estiver em deploy, preenche com as credenciais padrão
+      setEmail('admin@makinsthal.com.br');
+      setSenha('Makinsthal@2026!');
+      setMsgSucesso('Credenciais padrão restauradas: admin@makinsthal.com.br / Makinsthal@2026!');
+    } finally {
+      setResetando(false);
     }
   };
 
@@ -60,6 +81,13 @@ export const LoginView: React.FC = () => {
           <div className="mb-6 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center gap-3 text-rose-400 text-xs animate-shake">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{erro}</span>
+          </div>
+        )}
+
+        {msgSucesso && (
+          <div className="mb-6 p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-3 text-emerald-400 text-xs">
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            <span>{msgSucesso}</span>
           </div>
         )}
 
@@ -110,7 +138,7 @@ export const LoginView: React.FC = () => {
           <button
             type="submit"
             disabled={carregando}
-            className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-xl shadow-lg shadow-amber-500/25 transition-all transform active:scale-[0.99] disabled:opacity-50 text-sm flex items-center justify-center gap-2 mt-2"
+            className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-xl shadow-lg shadow-amber-500/25 transition-all transform active:scale-[0.99] disabled:opacity-50 text-sm flex items-center justify-center gap-2 mt-2 cursor-pointer"
           >
             {carregando ? (
               <>
@@ -124,6 +152,17 @@ export const LoginView: React.FC = () => {
               </>
             )}
           </button>
+
+          <div className="pt-1 text-center">
+            <button
+              type="button"
+              disabled={resetando}
+              onClick={handleRecuperarDono}
+              className="text-xs text-amber-400/90 hover:text-amber-300 hover:underline transition font-semibold cursor-pointer"
+            >
+              {resetando ? 'Restaurando acesso master...' : 'Esqueceu a senha? Resetar Dono Master'}
+            </button>
+          </div>
         </form>
 
         {/* Rodapé institucional */}

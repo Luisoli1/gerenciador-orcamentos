@@ -441,6 +441,11 @@ export const api = {
     });
     return res.data;
   },
+
+  recuperarDono: async (): Promise<{ message: string; email: string; senhaPadrao: string }> => {
+    const res = await axios.post(`${API_BASE_URL}/auth/recuperar-dono`);
+    return res.data;
+  },
 };
 
 export default api;

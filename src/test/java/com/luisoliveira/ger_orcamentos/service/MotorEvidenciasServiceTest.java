@@ -18,7 +18,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,10 +53,8 @@ public class MotorEvidenciasServiceTest {
     @Test
     @DisplayName("Cenário 1: Itens equivalentes com sinônimos técnicos, mesma unidade e quantidade única")
     void deveAvaliarComAltaConfiancaQuandoDescricaoESinonimosCoincidem() {
-        // Simula que não há alias prévio ainda (primeiro contato com o item)
         when(itemAliasRepository.buscarMelhorMatchAlias(any(), any())).thenReturn(List.of());
 
-        // Fornecedor A cotou: "Fio Flex Azul 2,5" com 150 M, sendo quantidade única na proposta
         ResultadoAvaliacaoEvidenciasDto resultado = motorEvidenciasService.avaliarEvidencias(
                 "Fio Flex Azul 2,5",
                 "M",
@@ -66,7 +63,7 @@ public class MotorEvidenciasServiceTest {
                 "Fornecedor Elétrica ABC",
                 caboAzulCanonico,
                 BigDecimal.ONE,
-                true, // quantidade única
+                true,
                 false,
                 null
         );
@@ -94,11 +91,10 @@ public class MotorEvidenciasServiceTest {
     }
 
     @Test
-    @DisplayName("Cenário 3: Anti-evidência - Cores divergentes de cabo elétrico (Azul vs Vermelho) devem ser barradas")
+    @DisplayName("Cenário 3: Anti-evidência forte - Cor de Cabo Elétrico (Azul vs Vermelho) bloqueia merge")
     void deveBarrarMergeQuandoCoresEletricasForemConflitantes() {
         when(itemAliasRepository.buscarMelhorMatchAlias(any(), any())).thenReturn(List.of());
 
-        // Fornecedor cotou Cabo Vermelho, mas mestre é Azul
         ResultadoAvaliacaoEvidenciasDto resultado = motorEvidenciasService.avaliarEvidencias(
                 "Cabo Flexível 2,5mm² Vermelho",
                 "M",
@@ -114,32 +110,22 @@ public class MotorEvidenciasServiceTest {
 
         assertNotNull(resultado);
         assertNotNull(resultado.alertaConflito());
-        assertTrue(resultado.alertaConflito().contains("Divergência de cor"));
-        assertTrue(resultado.confianca() <= 40, "Confiança deve ser travada em <= 40% em caso de conflito de cor");
+        assertTrue(resultado.alertaConflito().contains("Cor"));
+        assertTrue(resultado.confianca() <= 20, "Confiança deve ser travada em <= 20% para atributo bloqueante de cor: " + resultado.confianca());
     }
 
     @Test
-    @DisplayName("Cenário 4: Anti-evidência - Eletroduto Ponta Azul vs Convencional não devem mesclar")
-    void deveBarrarMergeQuandoVariantesTecnicasForemConflitantes() {
-        ItemCanonico eletrodutoMestre = new ItemCanonico(
-                "Eletroduto Corrugado Ponta Azul 20mm",
-                "ELETRODUTO CORRUGADO PONTA AZUL 20MM",
-                "M",
-                "Eletrodutos",
-                "Sistema"
-        );
-        eletrodutoMestre.setCodigoReferencia("REF-PA-20");
-        eletrodutoMestre.setId(20L);
-
+    @DisplayName("Cenário 4: Anti-evidência forte - Bitola de Cabo Elétrico (2.5mm² vs 4.0mm²) bloqueia merge")
+    void deveBarrarMergeQuandoBitolasDeCaboForemConflitantes() {
         when(itemAliasRepository.buscarMelhorMatchAlias(any(), any())).thenReturn(List.of());
 
         ResultadoAvaliacaoEvidenciasDto resultado = motorEvidenciasService.avaliarEvidencias(
-                "Eletroduto Corrugado Convencional 20mm",
+                "Cabo Flexível 4,0mm² Azul",
                 "M",
-                new BigDecimal("100.0"),
+                new BigDecimal("150.0"),
                 1L,
-                "Fornecedor B",
-                eletrodutoMestre,
+                "Fornecedor A",
+                caboAzulCanonico,
                 BigDecimal.ONE,
                 true,
                 false,
@@ -148,7 +134,205 @@ public class MotorEvidenciasServiceTest {
 
         assertNotNull(resultado);
         assertNotNull(resultado.alertaConflito());
-        assertTrue(resultado.alertaConflito().contains("Ponta Azul"));
-        assertTrue(resultado.confianca() <= 40, "Confiança deve ser travada em <= 40% para variantes técnicas diferentes");
+        assertTrue(resultado.alertaConflito().contains("Bitola"));
+        assertTrue(resultado.confianca() <= 20, "Confiança deve ser travada em <= 20% para bitolas divergentes: " + resultado.confianca());
+    }
+
+    @Test
+    @DisplayName("Cenário 5: Anti-evidência forte - Polos em Disjuntores (1P vs 3P) bloqueia merge")
+    void deveBarrarMergeQuandoPolosDeDisjuntorForemConflitantes() {
+        ItemCanonico disjuntorMono = new ItemCanonico(
+                "Disjuntor Termomagnético 1P 20A Curva C",
+                "DISJUNTOR TERMOMAGNETICO 1P 20A CURVA C",
+                "UN",
+                "Dispositivos de Proteção",
+                "Sistema"
+        );
+        disjuntorMono.setId(30L);
+
+        when(itemAliasRepository.buscarMelhorMatchAlias(any(), any())).thenReturn(List.of());
+
+        ResultadoAvaliacaoEvidenciasDto resultado = motorEvidenciasService.avaliarEvidencias(
+                "Disjuntor Tripolar 20A Curva C",
+                "UN",
+                new BigDecimal("5.0"),
+                1L,
+                "Fornecedor Steck",
+                disjuntorMono,
+                BigDecimal.ONE,
+                true,
+                false,
+                null
+        );
+
+        assertNotNull(resultado);
+        assertNotNull(resultado.alertaConflito());
+        assertTrue(resultado.alertaConflito().contains("Polos"));
+        assertTrue(resultado.confianca() <= 20, "Confiança travada em <= 20% para polos incompatíveis: " + resultado.confianca());
+    }
+
+    @Test
+    @DisplayName("Cenário 6: Anti-evidência forte - Amperagem em Disjuntores (20A vs 32A) bloqueia merge")
+    void deveBarrarMergeQuandoAmperagemDeDisjuntorForConflitante() {
+        ItemCanonico disjuntor20A = new ItemCanonico(
+                "Disjuntor Termomagnético 1P 20A Curva C",
+                "DISJUNTOR TERMOMAGNETICO 1P 20A CURVA C",
+                "UN",
+                "Dispositivos de Proteção",
+                "Sistema"
+        );
+        disjuntor20A.setId(31L);
+
+        when(itemAliasRepository.buscarMelhorMatchAlias(any(), any())).thenReturn(List.of());
+
+        ResultadoAvaliacaoEvidenciasDto resultado = motorEvidenciasService.avaliarEvidencias(
+                "Disjuntor Monopolar 32A Curva C",
+                "UN",
+                new BigDecimal("5.0"),
+                1L,
+                "Fornecedor Steck",
+                disjuntor20A,
+                BigDecimal.ONE,
+                true,
+                false,
+                null
+        );
+
+        assertNotNull(resultado);
+        assertNotNull(resultado.alertaConflito());
+        assertTrue(resultado.alertaConflito().contains("Amperagem"));
+        assertTrue(resultado.confianca() <= 20, "Confiança travada em <= 20% para amperagens distintas: " + resultado.confianca());
+    }
+
+    @Test
+    @DisplayName("Cenário 7: Anti-evidência forte - Amperagem em Tomadas (10A vs 20A) bloqueia merge")
+    void deveBarrarMergeQuandoAmperagemDeTomadaForConflitante() {
+        ItemCanonico tomada10A = new ItemCanonico(
+                "Módulo Tomada 2P+T 10A 250V Branco",
+                "MODULO TOMADA 2P+T 10A 250V BRANCO",
+                "UN",
+                "Tomadas e Interruptores",
+                "Sistema"
+        );
+        tomada10A.setId(40L);
+
+        when(itemAliasRepository.buscarMelhorMatchAlias(any(), any())).thenReturn(List.of());
+
+        ResultadoAvaliacaoEvidenciasDto resultado = motorEvidenciasService.avaliarEvidencias(
+                "Tomada 20A 250V Pial Plus",
+                "UN",
+                new BigDecimal("10.0"),
+                1L,
+                "Fornecedor Legrand",
+                tomada10A,
+                BigDecimal.ONE,
+                true,
+                false,
+                null
+        );
+
+        assertNotNull(resultado);
+        assertNotNull(resultado.alertaConflito());
+        assertTrue(resultado.alertaConflito().contains("Tomada"));
+        assertTrue(resultado.confianca() <= 20, "Confiança travada em <= 20% para tomada 10A vs 20A: " + resultado.confianca());
+    }
+
+    @Test
+    @DisplayName("Cenário 8: Anti-evidência forte - Diâmetro de Tubulação (20mm vs 25mm) bloqueia merge")
+    void deveBarrarMergeQuandoDiametroDeTubulacaoForConflitante() {
+        ItemCanonico eletroduto20 = new ItemCanonico(
+                "Eletroduto Corrugado 20mm Amarelo",
+                "ELETRODUTO CORRUGADO 20MM AMARELO",
+                "M",
+                "Eletrodutos",
+                "Sistema"
+        );
+        eletroduto20.setId(50L);
+
+        when(itemAliasRepository.buscarMelhorMatchAlias(any(), any())).thenReturn(List.of());
+
+        ResultadoAvaliacaoEvidenciasDto resultado = motorEvidenciasService.avaliarEvidencias(
+                "Eletroduto Corrugado 25mm Amarelo",
+                "M",
+                new BigDecimal("50.0"),
+                1L,
+                "Fornecedor Tigre",
+                eletroduto20,
+                BigDecimal.ONE,
+                true,
+                false,
+                null
+        );
+
+        assertNotNull(resultado);
+        assertNotNull(resultado.alertaConflito());
+        assertTrue(resultado.alertaConflito().contains("Diâmetro"));
+        assertTrue(resultado.confianca() <= 20, "Confiança travada em <= 20% para diâmetros distintos: " + resultado.confianca());
+    }
+
+    @Test
+    @DisplayName("Cenário 9: Anti-evidência forte - Tensão em Iluminação (127V vs 220V) bloqueia merge")
+    void deveBarrarMergeQuandoTensaoForConflitante() {
+        ItemCanonico lampada127V = new ItemCanonico(
+                "Lâmpada LED Tubular T8 18W 127V 6500K",
+                "LAMPADA LED TUBULAR T8 18W 127V 6500K",
+                "UN",
+                "Iluminação",
+                "Sistema"
+        );
+        lampada127V.setId(60L);
+
+        when(itemAliasRepository.buscarMelhorMatchAlias(any(), any())).thenReturn(List.of());
+
+        ResultadoAvaliacaoEvidenciasDto resultado = motorEvidenciasService.avaliarEvidencias(
+                "Lâmpada LED Tubular T8 18W 220V 6500K",
+                "UN",
+                new BigDecimal("20.0"),
+                1L,
+                "Fornecedor Philips",
+                lampada127V,
+                BigDecimal.ONE,
+                true,
+                false,
+                null
+        );
+
+        assertNotNull(resultado);
+        assertNotNull(resultado.alertaConflito());
+        assertTrue(resultado.alertaConflito().contains("Tensão"));
+        assertTrue(resultado.confianca() <= 20, "Confiança travada em <= 20% para 127V vs 220V: " + resultado.confianca());
+    }
+
+    @Test
+    @DisplayName("Cenário 10: Anti-evidência forte - Acabamento Metálico (Galvanizado a Fogo vs Pré-Zincado) bloqueia merge")
+    void deveBarrarMergeQuandoAcabamentoMetalicoForConflitante() {
+        ItemCanonico perfiladoGF = new ItemCanonico(
+                "Perfilado Perfurado 38x38 Galvanizado a Fogo Barra 6m",
+                "PERFILADO PERFURADO 38X38 GALVANIZADO A FOGO BARRA 6M",
+                "BARRA",
+                "Infraestrutura e Perfilados",
+                "Sistema"
+        );
+        perfiladoGF.setId(70L);
+
+        when(itemAliasRepository.buscarMelhorMatchAlias(any(), any())).thenReturn(List.of());
+
+        ResultadoAvaliacaoEvidenciasDto resultado = motorEvidenciasService.avaliarEvidencias(
+                "Perfilado Perfurado 38x38 Pré-Zincado (GE) Barra 6m",
+                "BARRA",
+                new BigDecimal("15.0"),
+                1L,
+                "Fornecedor Perfilados Brasil",
+                perfiladoGF,
+                BigDecimal.ONE,
+                true,
+                false,
+                null
+        );
+
+        assertNotNull(resultado);
+        assertNotNull(resultado.alertaConflito());
+        assertTrue(resultado.alertaConflito().contains("Acabamento"));
+        assertTrue(resultado.confianca() <= 20, "Confiança travada em <= 20% para GF vs GE: " + resultado.confianca());
     }
 }

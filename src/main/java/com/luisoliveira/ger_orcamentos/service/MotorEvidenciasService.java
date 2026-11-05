@@ -1,5 +1,6 @@
 package com.luisoliveira.ger_orcamentos.service;
 
+import com.luisoliveira.ger_orcamentos.dto.ConflitoBloqueanteDto;
 import com.luisoliveira.ger_orcamentos.dto.EvidenciaSinalDto;
 import com.luisoliveira.ger_orcamentos.dto.ResultadoAvaliacaoEvidenciasDto;
 import com.luisoliveira.ger_orcamentos.model.ItemAlias;
@@ -241,28 +242,38 @@ public class MotorEvidenciasService {
         }
 
         // -------------------------------------------------------------
-        // ANTI-EVIDÊNCIA: Conflito Técnico Estrito
-        // (Ex: Ponta Azul vs Convencional, Reforçado vs Leve, Cor Azul vs Vermelho)
+        // ANTI-EVIDÊNCIAS FORTES: ATRIBUTOS BLOQUEANTES POR CATEGORIA
+        // (Cor, Bitola, Diâmetro, Potência, Tensão, Polos, Amperagem, etc.)
         // -------------------------------------------------------------
-        String conflito = classificadorTecnicoService.detectarConflitoEspecificacao(descricaoItem, canonico.getDescricaoPadrao());
-        if (conflito != null) {
-            pontosAcumulados -= 60;
-            evidencias.add(new EvidenciaSinalDto("CONFLITO_ESPECIFICACAO_TECNICA", "Conflito de Especificação Técnica", conflito, -60, false));
-            motivos.add("⚠️ " + conflito);
+        List<ConflitoBloqueanteDto> conflitosBloqueantes = classificadorTecnicoService.detectarConflitosBloqueantes(descricaoItem, canonico.getDescricaoPadrao());
+        for (ConflitoBloqueanteDto c : conflitosBloqueantes) {
+            pontosAcumulados -= 70;
+            evidencias.add(new EvidenciaSinalDto(
+                    "ANTI_EVIDENCIA_" + c.atributo().toUpperCase().replaceAll("[^A-Z0-9_]", "_"),
+                    "Atributo Bloqueante: " + c.atributo(),
+                    c.mensagemFormatada(),
+                    -70,
+                    false
+            ));
+            motivos.add(c.mensagemFormatada());
         }
+
+        String conflitoPrimeiro = conflitosBloqueantes.isEmpty() ? null : conflitosBloqueantes.get(0).mensagemFormatada();
 
         // Cálculo da Confiança Normalizada (0 a 100%)
         int confiancaCalculada;
-        if (aliasEspecificoFornecedor && medidasCompativeis && conflito == null) {
+        if (aliasEspecificoFornecedor && medidasCompativeis && conflitosBloqueantes.isEmpty()) {
             confiancaCalculada = 98;
-        } else if (aliasGlobal && medidasCompativeis && conflito == null) {
+        } else if (aliasGlobal && medidasCompativeis && conflitosBloqueantes.isEmpty()) {
             confiancaCalculada = 96;
         } else {
             confiancaCalculada = Math.min(100, Math.max(0, (int) Math.round((pontosAcumulados / 85.0) * 100)));
         }
 
-        // Teto de segurança: se há conflito de especificação ou bitolas divergentes, nunca passa de 40%
-        if (conflito != null || !medidasCompativeis) {
+        // TRAVA RIGOROSA: Havendo qualquer conflito de atributo bloqueante, limita a confiança em <= 20%
+        if (!conflitosBloqueantes.isEmpty()) {
+            confiancaCalculada = Math.min(confiancaCalculada, 20);
+        } else if (!medidasCompativeis) {
             confiancaCalculada = Math.min(confiancaCalculada, 40);
         }
 
@@ -273,7 +284,7 @@ public class MotorEvidenciasService {
                 confiancaCalculada,
                 evidencias,
                 motivos,
-                conflito
+                conflitoPrimeiro
         );
     }
 
@@ -363,16 +374,26 @@ public class MotorEvidenciasService {
             }
         }
 
-        // 6. Anti-evidência de Especificação
-        String conflito = classificadorTecnicoService.detectarConflitoEspecificacao(descA, descB);
-        if (conflito != null) {
-            pontos -= 60;
-            evidencias.add(new EvidenciaSinalDto("CONFLITO_ESPECIFICACAO", "Conflito de Especificação", conflito, -60, false));
-            motivos.add("⚠️ " + conflito);
+        // 6. ANTI-EVIDÊNCIAS FORTES: ATRIBUTOS BLOQUEANTES ENTRE ITENS CONCORRENTES
+        List<ConflitoBloqueanteDto> conflitosBloqueantes = classificadorTecnicoService.detectarConflitosBloqueantes(descA, descB);
+        for (ConflitoBloqueanteDto c : conflitosBloqueantes) {
+            pontos -= 70;
+            evidencias.add(new EvidenciaSinalDto(
+                    "ANTI_EVIDENCIA_" + c.atributo().toUpperCase().replaceAll("[^A-Z0-9_]", "_"),
+                    "Atributo Bloqueante: " + c.atributo(),
+                    c.mensagemFormatada(),
+                    -70,
+                    false
+            ));
+            motivos.add(c.mensagemFormatada());
         }
 
+        String conflitoPrimeiro = conflitosBloqueantes.isEmpty() ? null : conflitosBloqueantes.get(0).mensagemFormatada();
+
         int confiancaCalculada = Math.min(100, Math.max(0, (int) Math.round((pontos / 75.0) * 100)));
-        if (conflito != null || !medidasCompativeis) {
+        if (!conflitosBloqueantes.isEmpty()) {
+            confiancaCalculada = Math.min(confiancaCalculada, 20);
+        } else if (!medidasCompativeis) {
             confiancaCalculada = Math.min(confiancaCalculada, 40);
         }
 
@@ -387,7 +408,7 @@ public class MotorEvidenciasService {
                 confiancaCalculada,
                 evidencias,
                 motivos,
-                conflito
+                conflitoPrimeiro
         );
     }
 

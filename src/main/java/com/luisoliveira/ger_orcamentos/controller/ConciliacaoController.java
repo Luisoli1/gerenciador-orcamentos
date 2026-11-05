@@ -140,6 +140,11 @@ public class ConciliacaoController {
         return ResponseEntity.ok(classificadorTecnicoService.extrairClassificacao(texto));
     }
 
+    @GetMapping("/atributos-bloqueantes")
+    public ResponseEntity<List<com.luisoliveira.ger_orcamentos.dto.RegraAtributoBloqueanteDto>> listarRegrasAtributosBloqueantes() {
+        return ResponseEntity.ok(classificadorTecnicoService.listarRegrasAtributosBloqueantes());
+    }
+
     // --- 6. MOTOR DE EVIDÊNCIAS DIRETO ---
 
     @GetMapping("/evidencias/avaliar")

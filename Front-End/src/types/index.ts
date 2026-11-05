@@ -448,6 +448,14 @@ export interface ValidarItemTreinamentoRequest {
   fatorConversao?: number;
 }
 
+export interface RegraAtributoBloqueante {
+  categoria: string;
+  descricao: string;
+  atributosBloqueantes: string[];
+  exemplosValores: string[];
+  impactoBloqueio: string;
+}
+
 export interface ClassificacaoTecnica {
   categoria: string;
   subcategoria?: string;

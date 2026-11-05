@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Obra, Fornecedor, QuadroComparativoDto, Qc, OrcamentoSalvo, ItemVariacaoDto, ConflitoQcDto, FaturamentoDireto, Usuario, LoginRequest, LoginResponse, AuditoriaLog, Role, ItemCanonico, ItemAlias, VerificacaoConciliacaoResponse, ConversaoPadrao, ItemTreinamento, ValidarItemTreinamentoRequest, EstatisticasTreinamento, ItemQuadroDTO, ClassificacaoTecnica } from '../types';
+import type { Obra, Fornecedor, QuadroComparativoDto, Qc, OrcamentoSalvo, ItemVariacaoDto, ConflitoQcDto, FaturamentoDireto, Usuario, LoginRequest, LoginResponse, AuditoriaLog, Role, ItemCanonico, ItemAlias, VerificacaoConciliacaoResponse, ConversaoPadrao, ItemTreinamento, ValidarItemTreinamentoRequest, EstatisticasTreinamento, ItemQuadroDTO, ClassificacaoTecnica, RegraAtributoBloqueante } from '../types';
 import { salvarArquivo } from '../utils/fileDownloader';
 
 
@@ -416,6 +416,11 @@ export const api = {
 
   extrairClassificacaoTecnica: async (texto: string): Promise<ClassificacaoTecnica> => {
     const res = await axios.get(`${API_BASE_URL}/conciliacao/classificacao/extrair?texto=${encodeURIComponent(texto)}`);
+    return res.data;
+  },
+
+  listarRegrasAtributosBloqueantes: async (): Promise<RegraAtributoBloqueante[]> => {
+    const res = await axios.get(`${API_BASE_URL}/conciliacao/atributos-bloqueantes`);
     return res.data;
   },
 };

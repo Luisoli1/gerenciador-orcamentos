@@ -216,9 +216,11 @@ export function ModalConciliacaoQc({
                           {sug.motivos.map((motivo, mIdx) => (
                             <span 
                               key={mIdx}
-                              className={`text-[10px] px-2 py-0.5 rounded-md font-medium border flex items-center gap-1 ${
-                                motivo.startsWith('⚠️')
-                                  ? 'bg-rose-500/10 text-rose-300 border-rose-500/20'
+                              className={`text-[10px] px-2.5 py-0.5 rounded-md font-medium border flex items-center gap-1 ${
+                                motivo.startsWith('⛔')
+                                  ? 'bg-rose-950/80 text-rose-300 border-rose-500/50 font-bold shadow-sm'
+                                  : motivo.startsWith('⚠️')
+                                  ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
                                   : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
                               }`}
                             >

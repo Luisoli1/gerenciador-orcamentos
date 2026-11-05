@@ -475,6 +475,7 @@ export interface UploadPdfTreinamentoResponse {
   totalNovosEnfileirados: number;
   arquivos: string[];
   mensagem: string;
+  erros?: string[];
 }
 
 export interface EstatisticasTreinamento {

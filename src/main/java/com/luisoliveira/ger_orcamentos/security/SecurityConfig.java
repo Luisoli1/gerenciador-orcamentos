@@ -42,7 +42,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/api/auth/**", "/error").permitAll()
+                .requestMatchers("/api/auth/**", "/api/conciliacao/diagnostico-ia", "/error").permitAll()
                 .requestMatchers("/api/usuarios/**", "/api/auditoria/**").hasRole("DONO")
                 .anyRequest().authenticated()
             )

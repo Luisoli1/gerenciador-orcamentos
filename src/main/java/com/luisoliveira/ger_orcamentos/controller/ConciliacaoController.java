@@ -195,5 +195,10 @@ public class ConciliacaoController {
                 canonicoId, quantidadeUnica, cotacaoSistema
         ));
     }
+
+    @GetMapping("/diagnostico-ia")
+    public ResponseEntity<java.util.Map<String, Object>> diagnosticoIa() {
+        return ResponseEntity.ok(conciliacaoService.obterDiagnosticoIa());
+    }
 }
 

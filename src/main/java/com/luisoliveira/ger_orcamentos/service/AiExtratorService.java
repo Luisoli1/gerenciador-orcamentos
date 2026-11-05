@@ -1,13 +1,18 @@
 package com.luisoliveira.ger_orcamentos.service;
 
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.luisoliveira.ger_orcamentos.client.GeminiClient;
+import com.luisoliveira.ger_orcamentos.dto.ItemQuadroDTO;
 import com.luisoliveira.ger_orcamentos.dto.QuadroConcorrenciaDto;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class AiExtratorService {
@@ -66,15 +71,52 @@ public class AiExtratorService {
         if (jsonTexto != null) {
             jsonTexto = jsonTexto.replaceAll("```json", "")
                     .replaceAll("```", "").trim();
+            int primeiroIndex = jsonTexto.indexOf('{');
+            int ultimoIndex = jsonTexto.lastIndexOf('}');
+            if (primeiroIndex >= 0 && ultimoIndex > primeiroIndex) {
+                jsonTexto = jsonTexto.substring(primeiroIndex, ultimoIndex + 1).trim();
+            }
         }
 
         try {
             System.out.println("--> Resposta crua da IA:\n" + jsonTexto);
             return jsonMapper.readValue(jsonTexto, QuadroConcorrenciaDto.class);
         } catch (Exception e) {
-            throw new RuntimeException(
-                    "Erro ao desserializar o JSON da IA para o QuadroConcorrenciaDto: "
-                            + e.getMessage(), e);
+            System.err.println("Aviso: Falha ao mapear diretamente para QuadroConcorrenciaDto (" + e.getMessage() + "). Tentando fallback resiliente via JsonNode...");
+            try {
+                JsonNode root = jsonMapper.readTree(jsonTexto);
+                QuadroConcorrenciaDto fallback = new QuadroConcorrenciaDto();
+                if (root.has("nomeFornecedor")) fallback.setNomeFornecedor(root.get("nomeFornecedor").asText(null));
+                if (root.has("cnpjFornecedor")) fallback.setCnpjFornecedor(root.get("cnpjFornecedor").asText(null));
+                if (root.has("numeroOrcamento")) fallback.setNumeroOrcamento(root.get("numeroOrcamento").asText(null));
+
+                if (root.has("itens") && root.get("itens").isArray()) {
+                    List<ItemQuadroDTO> itens = new ArrayList<>();
+                    for (JsonNode itNode : root.get("itens")) {
+                        String desc = itNode.has("descricao") ? itNode.get("descricao").asText(null) : null;
+                        if (desc == null || desc.isBlank()) continue;
+                        String unid = itNode.has("unidadeMedida") && !itNode.get("unidadeMedida").isNull() ? itNode.get("unidadeMedida").asText("UN") : "UN";
+                        String marca = itNode.has("marca") && !itNode.get("marca").isNull() ? itNode.get("marca").asText(null) : null;
+                        BigDecimal qtd = BigDecimal.ONE;
+                        if (itNode.has("quantidade") && !itNode.get("quantidade").isNull()) {
+                            try { qtd = new BigDecimal(itNode.get("quantidade").asText("1").replace(",", ".")); } catch (Exception ignored) {}
+                        }
+                        BigDecimal vlrUnit = BigDecimal.ZERO;
+                        if (itNode.has("valorUnitario") && !itNode.get("valorUnitario").isNull()) {
+                            try { vlrUnit = new BigDecimal(itNode.get("valorUnitario").asText("0").replace(",", ".")); } catch (Exception ignored) {}
+                        }
+                        BigDecimal vlrTot = BigDecimal.ZERO;
+                        if (itNode.has("valorTotal") && !itNode.get("valorTotal").isNull()) {
+                            try { vlrTot = new BigDecimal(itNode.get("valorTotal").asText("0").replace(",", ".")); } catch (Exception ignored) {}
+                        }
+                        itens.add(new ItemQuadroDTO(marca, desc.trim(), unid.trim().toUpperCase(), qtd, vlrUnit, vlrTot, null));
+                    }
+                    fallback.setItens(itens);
+                }
+                return fallback;
+            } catch (Exception exFallback) {
+                throw new RuntimeException("Erro ao desserializar o JSON da IA para o QuadroConcorrenciaDto: " + e.getMessage(), e);
+            }
         }
     }
 }

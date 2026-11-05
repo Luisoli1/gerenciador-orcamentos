@@ -701,16 +701,18 @@ public class ConciliacaoService {
     public UploadPdfTreinamentoResponseDto processarUploadPdfsTreinamento(
             List<MultipartFile> files, String fornecedorManual, String documentoManual, String tipoFonte) {
         if (files == null || files.isEmpty()) {
-            return new UploadPdfTreinamentoResponseDto(0, 0, 0, List.of(), "Nenhum arquivo enviado.");
+            return new UploadPdfTreinamentoResponseDto(0, 0, 0, List.of(), "Nenhum arquivo enviado.", List.of());
         }
 
         int totalItensExtraidos = 0;
         int totalNovosEnfileirados = 0;
         List<String> nomesArquivos = new ArrayList<>();
+        List<String> errosOcorridos = new ArrayList<>();
 
         for (MultipartFile file : files) {
             if (file == null || file.isEmpty()) continue;
-            nomesArquivos.add(file.getOriginalFilename());
+            String nomeArquivo = file.getOriginalFilename();
+            nomesArquivos.add(nomeArquivo);
 
             try {
                 if (aiExtratorService != null) {
@@ -721,21 +723,33 @@ public class ConciliacaoService {
                         String fornecedor = (fornecedorManual != null && !fornecedorManual.isBlank())
                                 ? fornecedorManual : extraido.getNomeFornecedor();
                         String documento = (documentoManual != null && !documentoManual.isBlank())
-                                ? documentoManual : (extraido.getNumeroOrcamento() != null ? extraido.getNumeroOrcamento() : file.getOriginalFilename());
+                                ? documentoManual : (extraido.getNumeroOrcamento() != null ? extraido.getNumeroOrcamento() : nomeArquivo);
 
                         int enfileirados = enfileirarItensLote(extraido.getItens(), fornecedor, documento, tipoFonte);
                         totalNovosEnfileirados += enfileirados;
+                    } else {
+                        errosOcorridos.add(nomeArquivo + ": A IA analisou o arquivo, mas nenhum produto ou item com descrição técnica foi encontrado.");
                     }
+                } else {
+                    String msgErro = "Serviço de inteligência artificial (Gemini) indisponível no servidor. Verifique as credenciais da API.";
+                    System.err.println(nomeArquivo + ": " + msgErro);
+                    errosOcorridos.add(nomeArquivo + ": " + msgErro);
                 }
             } catch (Exception e) {
-                System.err.println("Erro ao processar PDF para treinamento (" + file.getOriginalFilename() + "): " + e.getMessage());
+                String detalhe = (e.getMessage() != null && !e.getMessage().isBlank()) ? e.getMessage() : e.getClass().getSimpleName();
+                System.err.println("Erro ao processar PDF para treinamento (" + nomeArquivo + "): " + detalhe);
+                e.printStackTrace();
+                errosOcorridos.add(nomeArquivo + ": " + detalhe);
             }
         }
 
-        String msg = String.format("Processados %d arquivo(s) PDF com sucesso! %d produtos/itens extraídos pela IA, sendo %d novos adicionados à Fila de Treinamento.",
+        String msg = String.format("Processados %d arquivo(s) PDF! %d produtos/itens extraídos pela IA, sendo %d novos adicionados à Fila de Treinamento.",
                 nomesArquivos.size(), totalItensExtraidos, totalNovosEnfileirados);
+        if (!errosOcorridos.isEmpty()) {
+            msg += String.format(" (Avisos/Falhas em %d arquivo(s))", errosOcorridos.size());
+        }
 
-        return new UploadPdfTreinamentoResponseDto(nomesArquivos.size(), totalItensExtraidos, totalNovosEnfileirados, nomesArquivos, msg);
+        return new UploadPdfTreinamentoResponseDto(nomesArquivos.size(), totalItensExtraidos, totalNovosEnfileirados, nomesArquivos, msg, errosOcorridos);
     }
 
     public ItemTreinamentoDto obterProximoItemParaTreinar() {
@@ -992,6 +1006,17 @@ public class ConciliacaoService {
         if (auditoriaService != null) {
             auditoriaService.registrar("EXCLUSAO", "MATERIAL_MESTRE", id.toString(), "Material inativado: " + item.getDescricaoPadrao(), null);
         }
+    }
+
+    public Map<String, Object> obterDiagnosticoIa() {
+        Map<String, Object> diag = new HashMap<>();
+        diag.put("geminiClientConfigurado", geminiClient != null);
+        diag.put("aiExtratorServiceConfigurado", aiExtratorService != null);
+        diag.put("totalMateriaisMestre", itemCanonicoRepository.count());
+        diag.put("totalFilaTreinamento", itemTreinamentoFilaRepository.count());
+        diag.put("totalAliases", itemAliasRepository.count());
+        diag.put("status", "ONLINE");
+        return diag;
     }
 
     @Transactional

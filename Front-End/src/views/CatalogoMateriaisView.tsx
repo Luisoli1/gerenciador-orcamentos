@@ -520,6 +520,9 @@ export function CatalogoMateriaisView() {
           totalProcessados += (resp.totalArquivosProcessados || 1);
           totalItens += (resp.totalItensExtraidos || 0);
           totalNovos += (resp.totalNovosEnfileirados || 0);
+          if (resp.erros && resp.erros.length > 0) {
+            errosOcorridos.push(...resp.erros);
+          }
         } catch (itemErr: any) {
           if (cancelarEnvioRef.current || itemErr?.name === 'CanceledError' || itemErr?.code === 'ERR_CANCELED') {
             errosOcorridos.push(`${file.name}: Interrompido pelo usuário.`);

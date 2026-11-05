@@ -7,6 +7,15 @@ public record UploadPdfTreinamentoResponseDto(
         int totalItensExtraidos,
         int totalNovosEnfileirados,
         List<String> arquivos,
-        String mensagem
-) {}
-
+        String mensagem,
+        List<String> erros
+) {
+    public UploadPdfTreinamentoResponseDto(
+            int totalArquivosProcessados,
+            int totalItensExtraidos,
+            int totalNovosEnfileirados,
+            List<String> arquivos,
+            String mensagem) {
+        this(totalArquivosProcessados, totalItensExtraidos, totalNovosEnfileirados, arquivos, mensagem, List.of());
+    }
+}

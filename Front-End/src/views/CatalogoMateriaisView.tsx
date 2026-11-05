@@ -38,7 +38,8 @@ import {
   UploadCloud,
   Zap, 
   ChevronRight, 
-  Keyboard 
+  Keyboard,
+  Database 
 } from 'lucide-react';
 
 export function CatalogoMateriaisView() {

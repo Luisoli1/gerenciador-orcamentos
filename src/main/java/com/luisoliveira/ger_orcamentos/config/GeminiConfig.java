@@ -17,5 +17,10 @@ public class GeminiConfig {
             String p2 = "K_F-kcq-4pELs-ciC-4TzHP8BvWteoTD4w";
             System.setProperty("spring.ai.google.genai.api-key", p1 + p2);
         }
+        if (System.getProperty("spring.ai.google.genai.chat.options.model") == null) {
+            String envModel = System.getenv("SPRING_AI_GOOGLE_GENAI_CHAT_OPTIONS_MODEL");
+            System.setProperty("spring.ai.google.genai.chat.options.model", (envModel != null && !envModel.isBlank()) ? envModel.trim() : "gemini-3.5-flash-lite");
+        }
     }
 }
+

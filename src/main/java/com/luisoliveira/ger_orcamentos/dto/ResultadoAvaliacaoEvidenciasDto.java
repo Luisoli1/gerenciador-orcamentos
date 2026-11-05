@@ -11,3 +11,4 @@ public record ResultadoAvaliacaoEvidenciasDto(
         List<String> motivos,
         String alertaConflito
 ) {}
+

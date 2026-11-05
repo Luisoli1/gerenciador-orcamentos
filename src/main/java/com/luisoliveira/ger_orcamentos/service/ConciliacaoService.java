@@ -238,6 +238,19 @@ public class ConciliacaoService {
         return null; // Sem correspondência com evidências suficientes
     }
 
+    public ResultadoAvaliacaoEvidenciasDto avaliarEvidenciasItem(
+            String descricaoItem, String unidadeItem, BigDecimal quantidadeItem,
+            Long fornecedorId, String fornecedorNome, Long canonicoId,
+            boolean quantidadeUnica, boolean cotacaoSistema) {
+        ItemCanonico canonico = itemCanonicoRepository.findById(canonicoId)
+                .orElseThrow(() -> new RuntimeException("Material mestre não encontrado: " + canonicoId));
+        BigDecimal fator = obterFatorConversao(canonico.getId(), unidadeItem, canonico.getUnidadePadrao());
+        return motorEvidenciasService.avaliarEvidencias(
+                descricaoItem, unidadeItem, quantidadeItem, fornecedorId, fornecedorNome,
+                canonico, fator, quantidadeUnica, cotacaoSistema, null
+        );
+    }
+
     private List<String> extrairTokensNumericos(String texto) {
         List<String> nums = new ArrayList<>();
         Matcher m = Pattern.compile("\\b\\d+(?:\\.\\d+)?\\b").matcher(texto);

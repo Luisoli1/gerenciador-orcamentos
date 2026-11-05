@@ -139,5 +139,23 @@ public class ConciliacaoController {
             @RequestParam("texto") String texto) {
         return ResponseEntity.ok(classificadorTecnicoService.extrairClassificacao(texto));
     }
+
+    // --- 6. MOTOR DE EVIDÊNCIAS DIRETO ---
+
+    @GetMapping("/evidencias/avaliar")
+    public ResponseEntity<ResultadoAvaliacaoEvidenciasDto> avaliarEvidencias(
+            @RequestParam("descricaoItem") String descricaoItem,
+            @RequestParam(value = "unidadeItem", defaultValue = "UN") String unidadeItem,
+            @RequestParam(value = "quantidadeItem", required = false) java.math.BigDecimal quantidadeItem,
+            @RequestParam(value = "fornecedorId", required = false) Long fornecedorId,
+            @RequestParam(value = "fornecedorNome", required = false) String fornecedorNome,
+            @RequestParam("canonicoId") Long canonicoId,
+            @RequestParam(value = "quantidadeUnica", defaultValue = "false") boolean quantidadeUnica,
+            @RequestParam(value = "cotacaoSistema", defaultValue = "false") boolean cotacaoSistema) {
+        return ResponseEntity.ok(conciliacaoService.avaliarEvidenciasItem(
+                descricaoItem, unidadeItem, quantidadeItem, fornecedorId, fornecedorNome,
+                canonicoId, quantidadeUnica, cotacaoSistema
+        ));
+    }
 }
 

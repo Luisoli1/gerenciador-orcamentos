@@ -96,6 +96,15 @@ public class QcService {
         List<Orcamento> orcamentos = orcamentoRepository.findByQcId(qcId);
         List<QuadroConcorrenciaDto> listaOrcamentosDto = new ArrayList<>();
 
+        // Otimização: Pré-carrega todos os aliases ativos em 1 única consulta (evita N+1 queries sobre rede remota)
+        List<ItemAlias> todosAliases = itemAliasRepository.findByAtivoTrueOrderByDataAtualizacaoDesc();
+        Map<String, ItemCanonico> aliasParaCanonicoMap = new HashMap<>();
+        for (ItemAlias al : todosAliases) {
+            if (al.getDescricaoNormalizada() != null && al.getFornecedor() == null && al.getItemCanonico() != null) {
+                aliasParaCanonicoMap.putIfAbsent(al.getDescricaoNormalizada(), al.getItemCanonico());
+            }
+        }
+
         for (Orcamento orc : orcamentos) {
             Fornecedor forn = orc.getFornecedor();
             List<ItemQuadroDTO> itensDto = new ArrayList<>();
@@ -107,10 +116,10 @@ public class QcService {
 
                     if (canonicoId == null && item.getDescricao() != null) {
                         String norm = normalizarTexto(item.getDescricao());
-                        var aliasOpt = itemAliasRepository.findFirstByDescricaoNormalizadaAndFornecedorIsNullAndAtivoTrue(norm);
-                        if (aliasOpt.isPresent() && aliasOpt.get().getItemCanonico() != null) {
-                            canonicoId = aliasOpt.get().getItemCanonico().getId();
-                            nomeCanonico = aliasOpt.get().getItemCanonico().getDescricaoPadrao();
+                        ItemCanonico can = aliasParaCanonicoMap.get(norm);
+                        if (can != null) {
+                            canonicoId = can.getId();
+                            nomeCanonico = can.getDescricaoPadrao();
                         }
                     }
 

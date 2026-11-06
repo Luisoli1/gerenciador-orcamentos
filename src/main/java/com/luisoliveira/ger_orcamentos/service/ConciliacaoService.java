@@ -59,6 +59,39 @@ public class ConciliacaoService {
     @Autowired(required = false)
     private com.luisoliveira.ger_orcamentos.repositories.OrcamentoRepository orcamentoRepository;
 
+    private final Map<String, BigDecimal> cacheConversoesPadrao = new java.util.concurrent.ConcurrentHashMap<>();
+    private volatile long ultimaCargaConversoes = 0L;
+
+    private BigDecimal obterFatorConversaoPadraoCached(String uOrig, String uDest) {
+        long agora = System.currentTimeMillis();
+        if (cacheConversoesPadrao.isEmpty() || (agora - ultimaCargaConversoes) > 180_000) {
+            try {
+                List<ConversaoPadrao> padroes = conversaoPadraoRepository.findByAtivoTrue();
+                cacheConversoesPadrao.clear();
+                for (ConversaoPadrao cp : padroes) {
+                    if (cp.getUnidadeOrigem() != null && cp.getUnidadeDestino() != null && cp.getFatorMultiplicador() != null) {
+                        String chave = normalizarUnidade(cp.getUnidadeOrigem()) + "->" + normalizarUnidade(cp.getUnidadeDestino());
+                        cacheConversoesPadrao.put(chave, cp.getFatorMultiplicador());
+                    }
+                }
+                ultimaCargaConversoes = agora;
+            } catch (Exception ignored) {}
+        }
+
+        String dir = uOrig + "->" + uDest;
+        if (cacheConversoesPadrao.containsKey(dir)) {
+            return cacheConversoesPadrao.get(dir);
+        }
+        String inv = uDest + "->" + uOrig;
+        if (cacheConversoesPadrao.containsKey(inv)) {
+            BigDecimal fat = cacheConversoesPadrao.get(inv);
+            if (fat.compareTo(BigDecimal.ZERO) > 0) {
+                return BigDecimal.ONE.divide(fat, 4, RoundingMode.HALF_UP);
+            }
+        }
+        return null;
+    }
+
     @Autowired(required = false)
     private com.luisoliveira.ger_orcamentos.repositories.ItemOrcamentoRepository itemOrcamentoRepository;
 
@@ -127,17 +160,10 @@ public class ConciliacaoService {
             }
         }
 
-        // 2. Verifica conversão padrão global de engenharia
-        Optional<ConversaoPadrao> convPadrao = conversaoPadraoRepository
-                .findByUnidadeOrigemAndUnidadeDestinoAndAtivoTrue(uOrig, uDest);
-        if (convPadrao.isPresent()) {
-            return convPadrao.get().getFatorMultiplicador();
-        }
-        // Inversa
-        Optional<ConversaoPadrao> convPadraoInv = conversaoPadraoRepository
-                .findByUnidadeOrigemAndUnidadeDestinoAndAtivoTrue(uDest, uOrig);
-        if (convPadraoInv.isPresent() && convPadraoInv.get().getFatorMultiplicador().compareTo(BigDecimal.ZERO) > 0) {
-            return BigDecimal.ONE.divide(convPadraoInv.get().getFatorMultiplicador(), 4, RoundingMode.HALF_UP);
+        // 2. Verifica conversão padrão global de engenharia via cache em memória
+        BigDecimal padraoCached = obterFatorConversaoPadraoCached(uOrig, uDest);
+        if (padraoCached != null) {
+            return padraoCached;
         }
 
         return BigDecimal.ONE;

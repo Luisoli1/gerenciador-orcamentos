@@ -47,6 +47,54 @@ public class MotorEvidenciasService {
     @Autowired
     private ClassificadorTecnicoService classificadorTecnicoService;
 
+    // Cache em memória de curta duração para evitar milhares de queries remotas durante varreduras em lote
+    private final Map<String, CacheEntry<List<ItemAlias>>> cacheAliases = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<Long, CacheEntry<List<ItemCatalogoFabricante>>> cacheCatalogo = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long CACHE_TTL_MS = 180_000; // 3 minutos
+
+    private static class CacheEntry<T> {
+        final T data;
+        final long timestamp;
+        CacheEntry(T data) {
+            this.data = data;
+            this.timestamp = System.currentTimeMillis();
+        }
+        boolean isValido() {
+            return (System.currentTimeMillis() - timestamp) < CACHE_TTL_MS;
+        }
+    }
+
+    private List<ItemAlias> obterAliasesCached(String normA, Long fornecedorId) {
+        String key = normA + "_" + (fornecedorId != null ? fornecedorId : 0L);
+        CacheEntry<List<ItemAlias>> entry = cacheAliases.get(key);
+        if (entry != null && entry.isValido()) {
+            return entry.data;
+        }
+        List<ItemAlias> res = itemAliasRepository.buscarMelhorMatchAlias(normA, fornecedorId);
+        cacheAliases.put(key, new CacheEntry<>(res));
+        return res;
+    }
+
+    private List<ItemCatalogoFabricante> obterCatalogoCached(Long canonicoId) {
+        if (canonicoId == null) return List.of();
+        CacheEntry<List<ItemCatalogoFabricante>> entry = cacheCatalogo.get(canonicoId);
+        if (entry != null && entry.isValido()) {
+            return entry.data;
+        }
+        try {
+            List<ItemCatalogoFabricante> res = itemCatalogoFabricanteRepository.findByItemCanonicoId(canonicoId);
+            cacheCatalogo.put(canonicoId, new CacheEntry<>(res));
+            return res;
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    public void limparCacheMemoria() {
+        cacheAliases.clear();
+        cacheCatalogo.clear();
+    }
+
     // Dicionário de equivalência de sinônimos técnicos comuns em obras e fornecedores
     private static final Map<String, String> SINONIMOS_TECNICOS = new HashMap<>();
 
@@ -114,7 +162,7 @@ public class MotorEvidenciasService {
         // -------------------------------------------------------------
         // EVIDÊNCIA 1: Alias / Sinônimo previamente validado no histórico
         // -------------------------------------------------------------
-        List<ItemAlias> aliases = itemAliasRepository.buscarMelhorMatchAlias(normA, fornecedorId);
+        List<ItemAlias> aliases = obterAliasesCached(normA, fornecedorId);
         boolean aliasEspecificoFornecedor = false;
         boolean aliasGlobal = false;
         boolean veioDeOrcamentoHistorico = false;
@@ -162,7 +210,7 @@ public class MotorEvidenciasService {
         // EVIDÊNCIA 3: Catálogos Oficiais de Fabricantes
         // -------------------------------------------------------------
         try {
-            List<ItemCatalogoFabricante> itensCatalogo = itemCatalogoFabricanteRepository.findByItemCanonicoId(canonico.getId());
+            List<ItemCatalogoFabricante> itensCatalogo = obterCatalogoCached(canonico.getId());
             for (ItemCatalogoFabricante cat : itensCatalogo) {
                 boolean bateCodigo = codA != null && cat.getCodigoFabricante() != null && codA.equalsIgnoreCase(cat.getCodigoFabricante());
                 boolean bateDescricao = cat.getDescricaoCatalogo() != null && normA.contains(normalizar(cat.getDescricaoCatalogo()));

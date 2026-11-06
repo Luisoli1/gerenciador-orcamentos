@@ -206,6 +206,11 @@ export const api = {
     return response.data;
   },
 
+  conciliarQcComIa: async (id: number): Promise<QuadroComparativoDto> => {
+    const response = await axios.post(`${API_BASE_URL}/qc/${id}/conciliar-ia`);
+    return response.data;
+  },
+
   atualizarQc: async (id: number, qc: { numeroQuadro?: string; dataCriacao?: string }): Promise<Qc> => {
     const response = await axios.put(`${API_BASE_URL}/qc/${id}`, qc);
     return response.data;

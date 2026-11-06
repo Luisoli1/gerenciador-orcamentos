@@ -144,6 +144,7 @@ export function QCView({ obraId, initialQcId, initialQcData, onClearInitialQc }:
   const [modalConciliacaoAberto, setModalConciliacaoAberto] = useState<boolean>(false);
   const [verificacaoConciliacao, setVerificacaoConciliacao] = useState<VerificacaoConciliacaoResponse | null>(null);
   const [materiaisMestre, setMateriaisMestre] = useState<ItemCanonico[]>([]);
+  const [conciliandoIa, setConciliandoIa] = useState<boolean>(false);
 
   // Dados do QC ativos: se estiver em edição, usa qcEditavel; caso contrário, qcData
   const activeQc = modoEdicao && qcEditavel ? qcEditavel : qcData;
@@ -438,6 +439,26 @@ export function QCView({ obraId, initialQcId, initialQcData, onClearInitialQc }:
   const handleCancelarEdicaoQc = () => {
     setQcEditavel(null);
     setModoEdicao(false);
+  };
+
+  // Conciliação Semântica Cruzada com Gemini AI
+  const handleConciliarComIa = async () => {
+    const targetQcId = selectedQcId || activeQc?.metadados?.id;
+    if (!targetQcId) {
+      alert("Nenhum QC selecionado para conciliação.");
+      return;
+    }
+    setConciliandoIa(true);
+    try {
+      const qcAtualizado = await api.conciliarQcComIa(targetQcId);
+      setQcData(qcAtualizado);
+      if (qcEditavel) setQcEditavel(null);
+    } catch (err: any) {
+      console.error("Erro na conciliação com IA:", err);
+      alert("Não foi possível concluir a conciliação com IA neste momento: " + (err.message || 'Erro de rede'));
+    } finally {
+      setConciliandoIa(false);
+    }
   };
 
   // Recalcular totais e vencedor após qualquer edição
@@ -1561,6 +1582,25 @@ Equipe de Suprimentos - Makinsthal`;
               </div>
 
               <div className="flex items-center gap-3">
+                <button
+                  onClick={handleConciliarComIa}
+                  disabled={conciliandoIa}
+                  className="text-xs px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-full font-bold flex items-center gap-2 shadow-md shadow-blue-500/20 transition cursor-pointer"
+                  title="Pedir para a IA do Gemini analisar semanticamente todos os materiais e unificar linhas com nomes parecidos"
+                >
+                  {conciliandoIa ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-200" />
+                      <span>Conciliando com IA...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Conciliar com IA</span>
+                    </>
+                  )}
+                </button>
+
                 <span className="text-xs px-3.5 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-bold flex items-center gap-2">
                   <Trophy className="w-4 h-4 text-amber-400" />
                   <span>Vencedor Geral: <strong>{fornecedorVencedorEfetivo || "Em análise"}</strong></span>

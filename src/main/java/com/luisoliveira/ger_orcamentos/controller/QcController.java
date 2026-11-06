@@ -54,6 +54,16 @@ public class QcController {
         }
     }
 
+    @PostMapping("/{id}/conciliar-ia")
+    public ResponseEntity<QuadroComparativoDto> conciliarQcComIa(@PathVariable Long id) {
+        try {
+            QuadroComparativoDto dto = qcService.conciliarQcComIa(id);
+            return ResponseEntity.ok(dto);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
     @PostMapping
     public ResponseEntity<Qc> criarQc(@RequestBody Qc qc) {
         Qc novoQc = qcService.salvar(qc);

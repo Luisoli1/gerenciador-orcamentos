@@ -28,6 +28,15 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.NoSuchElementException;
+import java.util.Map;
+import java.util.HashMap;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.luisoliveira.ger_orcamentos.client.GeminiClient;
+import com.luisoliveira.ger_orcamentos.model.ItemAlias;
+import com.luisoliveira.ger_orcamentos.model.ItemCanonico;
+import com.luisoliveira.ger_orcamentos.repositories.ItemAliasRepository;
+import com.luisoliveira.ger_orcamentos.repositories.ItemCanonicoRepository;
+import com.luisoliveira.ger_orcamentos.repositories.ItemOrcamentoRepository;
 
 @Service
 public class QcService {
@@ -43,6 +52,21 @@ public class QcService {
 
     @Autowired
     private FaturamentoDiretoRepository faturamentoDiretoRepository;
+
+    @Autowired
+    private GeminiClient geminiClient;
+
+    @Autowired
+    private ItemCanonicoRepository itemCanonicoRepository;
+
+    @Autowired
+    private ItemAliasRepository itemAliasRepository;
+
+    @Autowired
+    private ItemOrcamentoRepository itemOrcamentoRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     public List<Qc> listarTodos() {
         return qcRepository.findAll();
@@ -79,6 +103,8 @@ public class QcService {
 
             if (orc.getItens() != null) {
                 for (ItemOrcamento item : orc.getItens()) {
+                    Long canonicoId = item.getItemCanonico() != null ? item.getItemCanonico().getId() : null;
+                    String nomeCanonico = item.getItemCanonico() != null ? item.getItemCanonico().getDescricaoPadrao() : null;
                     itensDto.add(new ItemQuadroDTO(
                             item.getMarca(),
                             item.getDescricao(),
@@ -86,7 +112,9 @@ public class QcService {
                             item.getQuantidade(),
                             item.getValorUnitario(),
                             item.getValorTotal(),
-                            item.getAliquotaIpi()
+                            item.getAliquotaIpi(),
+                            canonicoId,
+                            nomeCanonico
                     ));
                 }
             }
@@ -127,6 +155,135 @@ public class QcService {
         String observacao = "Quadro Comparativo montado do banco de dados";
 
         return new QuadroComparativoDto(metadados, listaOrcamentosDto, nomeVencedor, observacao);
+    }
+
+    @Transactional
+    public QuadroComparativoDto conciliarQcComIa(Long qcId) {
+        Qc qc = qcRepository.findById(qcId)
+                .orElseThrow(() -> new RuntimeException("QC não encontrado com ID: " + qcId));
+
+        List<Orcamento> orcamentos = orcamentoRepository.findByQcId(qcId);
+        if (orcamentos.isEmpty()) {
+            return montarQuadroComparativo(qcId);
+        }
+
+        List<Map<String, Object>> itensParaIa = new ArrayList<>();
+        List<ItemOrcamento> todosItens = new ArrayList<>();
+
+        for (Orcamento orc : orcamentos) {
+            String nomeFornecedor = orc.getFornecedor() != null ? orc.getFornecedor().getNome() : "Fornecedor";
+            if (orc.getItens() != null) {
+                for (ItemOrcamento item : orc.getItens()) {
+                    todosItens.add(item);
+                    Map<String, Object> mapItem = new HashMap<>();
+                    mapItem.put("fornecedor", nomeFornecedor);
+                    mapItem.put("descricao", item.getDescricao());
+                    mapItem.put("unidade", item.getUnidadeDeMedida());
+                    mapItem.put("quantidade", item.getQuantidade());
+                    mapItem.put("valorUnitario", item.getValorUnitario());
+                    itensParaIa.add(mapItem);
+                }
+            }
+        }
+
+        if (itensParaIa.isEmpty()) {
+            return montarQuadroComparativo(qcId);
+        }
+
+        try {
+            String jsonEntrada = objectMapper.writeValueAsString(itensParaIa);
+            String respostaIa = geminiClient.conciliarItensComIa(jsonEntrada);
+
+            String jsonLimpo = respostaIa.trim();
+            if (jsonLimpo.startsWith("```json")) {
+                jsonLimpo = jsonLimpo.substring(7);
+            } else if (jsonLimpo.startsWith("```")) {
+                jsonLimpo = jsonLimpo.substring(3);
+            }
+            if (jsonLimpo.endsWith("```")) {
+                jsonLimpo = jsonLimpo.substring(0, jsonLimpo.length() - 3);
+            }
+            jsonLimpo = jsonLimpo.trim();
+
+            JsonNode root = objectMapper.readTree(jsonLimpo);
+            JsonNode grupos = root.get("grupos");
+
+            if (grupos != null && grupos.isArray()) {
+                for (JsonNode grupo : grupos) {
+                    String nomeCanonico = grupo.path("nomeCanonico").asText("").trim();
+                    String unidadePadrao = grupo.path("unidadePadrao").asText("UN").trim();
+                    if (nomeCanonico.isBlank()) continue;
+
+                    String normCanonico = normalizarTexto(nomeCanonico);
+                    ItemCanonico canonico = itemCanonicoRepository.findByDescricaoNormalizada(normCanonico)
+                            .orElseGet(() -> {
+                                ItemCanonico novo = new ItemCanonico();
+                                novo.setDescricaoPadrao(nomeCanonico);
+                                novo.setDescricaoNormalizada(normCanonico);
+                                novo.setUnidadePadrao(unidadePadrao.toUpperCase());
+                                novo.setAtivo(true);
+                                novo.setDataCriacao(java.time.LocalDateTime.now());
+                                novo.setCriadoPor("Gemini AI");
+                                novo.setOrigem("CONCILIACAO_QC_IA");
+                                return itemCanonicoRepository.save(novo);
+                            });
+
+                    JsonNode itensGrupo = grupo.get("itens");
+                    if (itensGrupo != null && itensGrupo.isArray()) {
+                        for (JsonNode it : itensGrupo) {
+                            String fornNome = it.path("fornecedor").asText("").trim();
+                            String descOriginal = it.path("descricaoOriginal").asText("").trim();
+                            String marcaDetectada = it.path("marca").asText("").trim();
+
+                            if (descOriginal.isBlank()) continue;
+                            String normAlias = normalizarTexto(descOriginal);
+
+                            // Salva na memória De-Para (ItemAlias) para nunca mais esquecer
+                            itemAliasRepository.findFirstByDescricaoNormalizadaAndFornecedorIsNullAndAtivoTrue(normAlias)
+                                    .orElseGet(() -> {
+                                        ItemAlias alias = new ItemAlias();
+                                        alias.setDescricaoOriginal(descOriginal);
+                                        alias.setDescricaoNormalizada(normAlias);
+                                        alias.setItemCanonico(canonico);
+                                        alias.setOrigem("IA_CONCILIACAO");
+                                        alias.setCriadoPorNome("Gemini AI");
+                                        alias.setAtivo(true);
+                                        alias.setDataCriacao(java.time.LocalDateTime.now());
+                                        alias.setDataAtualizacao(java.time.LocalDateTime.now());
+                                        return itemAliasRepository.save(alias);
+                                    });
+
+                            // Vincula no item do orçamento
+                            for (ItemOrcamento itemBanco : todosItens) {
+                                boolean descBate = itemBanco.getDescricao() != null &&
+                                        normalizarTexto(itemBanco.getDescricao()).equals(normAlias);
+                                if (descBate) {
+                                    itemBanco.setItemCanonico(canonico);
+                                    if (!marcaDetectada.isBlank() && (itemBanco.getMarca() == null || itemBanco.getMarca().isBlank())) {
+                                        itemBanco.setMarca(marcaDetectada);
+                                    }
+                                    itemOrcamentoRepository.save(itemBanco);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Aviso: Falha ao conciliar QC com IA (prosseguindo sem travar): " + e.getMessage());
+        }
+
+        return montarQuadroComparativo(qcId);
+    }
+
+    private String normalizarTexto(String str) {
+        if (str == null) return "";
+        return java.text.Normalizer.normalize(str, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
+                .replaceAll("[^a-zA-Z0-9 ]", " ")
+                .replaceAll("\\s+", " ")
+                .trim()
+                .toLowerCase();
     }
 
     public Qc salvar(Qc qc) {

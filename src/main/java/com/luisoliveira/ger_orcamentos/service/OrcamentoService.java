@@ -28,6 +28,9 @@ public class OrcamentoService {
     @Autowired
     private QcRepository qcRepository;
 
+    @Autowired
+    private QcService qcService;
+
     public OrcamentoService(AiExtratorService aiExtratorService,
                             OrcamentoRepository orcamentoRepository,
                             FornecedorService fornecedorService,
@@ -164,6 +167,13 @@ public class OrcamentoService {
 
         for (QuadroConcorrenciaDto dto : listaOrcamentos) {
             salvarOrcamentoNoBanco(dto, novoQc);
+        }
+
+        // Executa conciliação semântica com IA automaticamente para unificar itens
+        try {
+            return qcService.conciliarQcComIa(novoQc.getId());
+        } catch (Exception e) {
+            System.err.println("Aviso: Falha na conciliação automática com IA: " + e.getMessage());
         }
 
         QuadroConcorrenciaDto vencedor = listaOrcamentos.stream()

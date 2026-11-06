@@ -64,10 +64,13 @@ export interface ItemQuadroDTO {
   marca?: string;
   descricao: string;
   unidadeMedida?: string;
+  unidadeDeMedida?: string;
   quantidade?: number;
   valorUnitario?: number;
   valorTotal?: number;
   aliquotaIpi?: number;
+  itemCanonicoId?: number;
+  nomeCanonico?: string;
 }
 
 export interface QuadroConcorrenciaDto {
@@ -197,6 +200,7 @@ export interface ConsolidatedItem {
   quotes: ConsolidatedQuote[];
   melhorUnitario: number | null;
   melhorTotal: number | null;
+  itemCanonicoId?: number;
 }
 
 export interface ItemVariacaoDto {

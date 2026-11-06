@@ -277,10 +277,16 @@ export function consolidateQuadro(orcamentos: QuadroConcorrenciaDto[]): Consolid
   // 1. Identificar todas as linhas canônicas únicas
   orcamentos.forEach((orc) => {
     (orc.itens || []).forEach((item) => {
-      const jaExiste = consolidatedList.find(c => areItemsEquivalent(c.descricao, item.descricao));
+      const jaExiste = consolidatedList.find(c => {
+        if (c.itemCanonicoId && item.itemCanonicoId) {
+          return c.itemCanonicoId === item.itemCanonicoId;
+        }
+        return areItemsEquivalent(c.descricao, item.descricao);
+      });
+
       if (!jaExiste) {
         // Se a unidade for metro ou houver indicação de metro na lista, priorizar unidade base 'M'
-        let baseUnd = item.unidadeMedida || 'UN';
+        let baseUnd = item.unidadeMedida || item.unidadeDeMedida || 'UN';
         let baseQtd = item.quantidade || 1;
 
         // Se o item é eletroduto ou cabo e tem metragem, base unit é 'M'
@@ -289,22 +295,30 @@ export function consolidateQuadro(orcamentos: QuadroConcorrenciaDto[]): Consolid
           baseUnd = 'M';
         }
 
+        const descFinal = item.nomeCanonico || item.descricao;
+
         consolidatedList.push({
           itemSeq: consolidatedList.length + 1,
-          descricao: item.descricao,
+          descricao: descFinal,
           unidadeMedida: baseUnd,
           quantidade: baseQtd,
           quotes: [],
           melhorUnitario: null,
           melhorTotal: null,
+          itemCanonicoId: item.itemCanonicoId,
         });
       } else {
+        if (item.nomeCanonico && !jaExiste.descricao.includes(item.nomeCanonico)) {
+          jaExiste.descricao = item.nomeCanonico;
+        }
+        if (item.itemCanonicoId && !jaExiste.itemCanonicoId) {
+          jaExiste.itemCanonicoId = item.itemCanonicoId;
+        }
         // Se outro item do mesmo grupo tem unidade 'M' e quantidade total (ex: 500 M vs 10 RL), nivelar pela unidade base de consumo
         if (item.unidadeMedida?.toUpperCase() === 'M' && jaExiste.unidadeMedida.toUpperCase() !== 'M') {
           jaExiste.unidadeMedida = 'M';
-          jaExiste.quantidade = item.quantidade;
+          jaExiste.quantidade = item.quantidade || 1;
         } else if (item.quantidade && item.quantidade > jaExiste.quantidade && jaExiste.unidadeMedida.toUpperCase() === item.unidadeMedida?.toUpperCase()) {
-          // Atualiza quantidade solicitada pelo maior quantitativo da obra se divergente
           jaExiste.quantidade = item.quantidade;
         }
       }
@@ -317,7 +331,12 @@ export function consolidateQuadro(orcamentos: QuadroConcorrenciaDto[]): Consolid
     let minTot: number | null = null;
 
     orcamentos.forEach((orc) => {
-      const match = (orc.itens || []).find((i: ItemQuadroDTO) => areItemsEquivalent(i.descricao, row.descricao));
+      const match = (orc.itens || []).find((i: ItemQuadroDTO) => {
+        if (row.itemCanonicoId && i.itemCanonicoId) {
+          return row.itemCanonicoId === i.itemCanonicoId;
+        }
+        return areItemsEquivalent(i.descricao, row.descricao);
+      });
 
       let vuOriginal = match?.valorUnitario != null ? Number(match.valorUnitario) : null;
       let vtOriginal = match?.valorTotal != null ? Number(match.valorTotal) : null;

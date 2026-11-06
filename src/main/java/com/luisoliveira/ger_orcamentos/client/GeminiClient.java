@@ -186,4 +186,41 @@ public class GeminiClient {
                 .call()
                 .content();
     }
+
+    public String conciliarItensComIa(String jsonItens) {
+        String prompt = "Você é um Engenheiro de Custos sênior especialista em suprimentos e conciliação de compras para construção civil (instalações elétricas, hidráulica, combate a incêndio, pintura, alvenaria, estrutura metálica e acabamentos).\n\n" +
+                "Recebemos cotações de diferentes fornecedores para uma obra. Cada fornecedor escreve os materiais com abreviações, marcas ou embalagens comerciais diferentes (ex: um chama de 'CX OCTOG FDO MOVEL 4X4 TIGRE', outro de 'CAIXA OCT 4X4 P/ LAJE'; um vende eletroduto por metro '500 M', outro por rolo '10 RL C/ 50M', outro por '20 BOBINA 25M'; um escreve 'CABO FLEXIVEL 2,5MM 750V AZUL', outro 'FIO FLEXIVEL 2,5MM 750V AZ').\n\n" +
+                "SUA MISSÃO:\n" +
+                "Analise cuidadosamente todos os itens abaixo de todos os fornecedores e AGRUPE-OS por correspondência semântica e técnica real. Identifique quais itens representam rigorosamente o MESMO material que deve ser comparado na mesma linha da concorrência.\n\n" +
+                "REGRAS OBRIGATÓRIAS DE ENGENHARIA:\n" +
+                "1. Materiais idênticos devem ser agrupados no mesmo grupo (ex: Caixa Octogonal 4x4, Cabo Flexível 2.5mm Azul, Eletroduto Corrugado 3/4\", Lâmpada LED 9W, Disjuntor DIN 1P 20A).\n" +
+                "2. NÃO junte bitolas, espessuras ou amperagens diferentes (ex: Cabo 2.5mm NUNCA pode juntar com Cabo 4.0mm; Disjuntor 20A NUNCA pode juntar com 32A; Chapa 14 NUNCA junta com Chapa 18; Tubo 25mm NUNCA junta com Tubo 50mm).\n" +
+                "3. Detecte FATOR DE CONVERSÃO DE EMBALAGEM: Se um fornecedor vendeu por rolo ou caixa (ex: rolo com 50m, bobina 25m, caixa com 100), indique o fatorConversao para nivelar com a unidade de consumo (M ou UN). Se não houver conversão, retorne 1.\n" +
+                "4. Extraia a MARCA do produto se estiver citada no texto (ex: TIGRE, SIL, STECK, AMANCO, WEG, PIAL, etc.). Se não houver, deixe string vazia \"\".\n" +
+                "5. Defina um nomeCanonico limpo, formal e padronizado para o material mestre.\n\n" +
+                "ITENS RECEBIDOS DOS FORNECEDORES:\n" +
+                jsonItens + "\n\n" +
+                "Retorne APENAS um JSON válido no formato abaixo, sem formatação markdown ou textos adicionais:\n" +
+                "{\n" +
+                "  \"grupos\": [\n" +
+                "    {\n" +
+                "      \"nomeCanonico\": \"Nome Padronizado da Engenharia\",\n" +
+                "      \"unidadePadrao\": \"M ou UN ou KG\",\n" +
+                "      \"itens\": [\n" +
+                "        {\n" +
+                "          \"fornecedor\": \"Nome do Fornecedor\",\n" +
+                "          \"descricaoOriginal\": \"Descrição exata do fornecedor\",\n" +
+                "          \"marca\": \"Marca\",\n" +
+                "          \"fatorConversao\": 1\n" +
+                "        }\n" +
+                "      ]\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}";
+
+        return chatClient.prompt()
+                .user(prompt)
+                .call()
+                .content();
+    }
 }

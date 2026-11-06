@@ -56,6 +56,12 @@ public class ConciliacaoService {
     @Autowired(required = false)
     private AiExtratorService aiExtratorService;
 
+    @Autowired(required = false)
+    private com.luisoliveira.ger_orcamentos.repositories.OrcamentoRepository orcamentoRepository;
+
+    @Autowired(required = false)
+    private com.luisoliveira.ger_orcamentos.repositories.ItemOrcamentoRepository itemOrcamentoRepository;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // ==========================================
@@ -341,17 +347,10 @@ public class ConciliacaoService {
         }
 
         int totalLinhasQc = chavesUnicasQc.size();
-        boolean possuiDiscrepancia = (orcs.size() >= 2 && totalLinhasQc > maiorLinhas);
-
         List<DiscrepanciaItemDto> discrepancias = new ArrayList<>();
-        String mensagem = "Quadro comparativo conciliado perfeitamente com " + totalLinhasQc + " linhas.";
 
-        if (possuiDiscrepancia) {
-            int diferenca = totalLinhasQc - maiorLinhas;
-            mensagem = String.format("Atenção: O maior orçamento possui %d itens, mas o quadro gerou %d linhas (%d linhas a mais). Foram detectadas possíveis duplicidades de itens com descrições divergentes.",
-                    maiorLinhas, totalLinhasQc, diferenca);
-
-            // Identifica itens com apenas 1 fornecedor (linhas 'órfãs') para revisão e calcula evidências cruzadas
+        // Identifica itens com apenas 1 fornecedor (linhas 'órfãs') para revisão e calcula evidências cruzadas
+        if (orcs.size() >= 2) {
             for (QuadroConcorrenciaDto orc : orcs) {
                 if (orc.getItens() == null) continue;
                 Map<BigDecimal, Long> freq = frequenciasQtdPorOrc.getOrDefault(orc.getNomeFornecedor(), Map.of());
@@ -371,7 +370,7 @@ public class ConciliacaoService {
                             sugestoesEquivalentes.add(sug);
                         }
 
-                        // Busca item correspondente em outro fornecedor com evidências cruzadas (ex: 157m idêntico)
+                        // Busca item correspondente em outro fornecedor com evidências cruzadas
                         boolean qtdAUnica = it.quantidade() != null && freq.getOrDefault(it.quantidade(), 0L) == 1L;
 
                         for (QuadroConcorrenciaDto outroOrc : orcs) {
@@ -388,7 +387,7 @@ public class ConciliacaoService {
                                         null, BigDecimal.ONE
                                 );
 
-                                if (crossEvidencias.confianca() >= 45) {
+                                if (crossEvidencias.confianca() >= 35) {
                                     String justificativa = !crossEvidencias.motivos().isEmpty()
                                             ? String.join(" • ", crossEvidencias.motivos())
                                             : "Correspondência cruzada por evidências (" + crossEvidencias.confianca() + "%).";
@@ -418,6 +417,11 @@ public class ConciliacaoService {
                 }
             }
         }
+
+        boolean possuiDiscrepancia = !discrepancias.isEmpty() || (orcs.size() >= 2 && totalLinhasQc > maiorLinhas);
+        String mensagem = possuiDiscrepancia
+                ? String.format("Atenção: Foram detectados %d itens com descrições divergentes ou pendentes de conciliação entre as cotações.", discrepancias.size())
+                : "Quadro comparativo conciliado perfeitamente com " + totalLinhasQc + " linhas.";
 
         return new VerificacaoConciliacaoResponseDto(
                 possuiDiscrepancia, totalLinhasQc, maiorLinhas, menorLinhas,
@@ -459,6 +463,25 @@ public class ConciliacaoService {
                         canonico, item.fornecedorId(), item.descricaoOriginal(),
                         "USUARIO_CONFIRMADO", usuarioId, usuarioNome
                 );
+            }
+
+            // Atualiza os itens do QC atual no banco de dados para sincronizar a conciliação
+            if (request.qcId() != null && orcamentoRepository != null && itemOrcamentoRepository != null) {
+                try {
+                    List<com.luisoliveira.ger_orcamentos.model.Orcamento> orcs = orcamentoRepository.findByQcId(request.qcId());
+                    for (com.luisoliveira.ger_orcamentos.model.Orcamento orc : orcs) {
+                        if (orc.getItens() != null) {
+                            for (com.luisoliveira.ger_orcamentos.model.ItemOrcamento itBanco : orc.getItens()) {
+                                if (itBanco.getDescricao() != null && normalizarTexto(itBanco.getDescricao()).equals(normalizarTexto(item.descricaoOriginal()))) {
+                                    itBanco.setItemCanonico(canonico);
+                                    itemOrcamentoRepository.save(itBanco);
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("Aviso ao vincular item no QC: " + e.getMessage());
+                }
             }
         }
     }

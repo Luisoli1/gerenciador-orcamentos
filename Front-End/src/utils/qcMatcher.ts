@@ -123,6 +123,17 @@ const TECHNICAL_SYNONYMS: Record<string, string> = {
   'monopolar': '1p',
   'bipolar': '2p',
   'tripolar': '3p',
+  // Hidráulica Predial (PEX / PE-RT e Conexões)
+  'pert': 'pex',
+  'pe-rt': 'pex',
+  'pe-xa': 'pex',
+  'pe-xb': 'pex',
+  'adaptador': 'conector',
+  'asf': '',
+  'latao': 'metalico',
+  'metalica': 'metalico',
+  'joelho': 'cotovelo',
+  'curva': 'cotovelo',
   // Unidades
   'pc': 'un',
   'und': 'un',
@@ -228,6 +239,27 @@ export function areItemsEquivalent(descA: string, descB: string): boolean {
   if (specsA.wattage && specsB.wattage && specsA.wattage !== specsB.wattage) return false;
   if (specsA.color && specsB.color && specsA.color !== specsB.color) return false;
   if (specsA.tempColor && specsB.tempColor && specsA.tempColor !== specsB.tempColor) return false;
+
+  // 2.1 BLOQUEIO DE CATEGORIA / TIPO DE PEÇA DISTINTO NA HIDRÁULICA E ELÉTRICA
+  const isCotoveloA = /\b(cotovelo|joelho|curva)\b/i.test(normA);
+  const isCotoveloB = /\b(cotovelo|joelho|curva)\b/i.test(normB);
+  if (isCotoveloA !== isCotoveloB) return false;
+
+  const isTuboA = /\b(tubo|tubulacao)\b/i.test(normA);
+  const isTuboB = /\b(tubo|tubulacao)\b/i.test(normB);
+  if (isTuboA !== isTuboB) return false;
+
+  const isTeA = /\b(te)\b/i.test(normA);
+  const isTeB = /\b(te)\b/i.test(normB);
+  if (isTeA !== isTeB) return false;
+
+  const isLuvaA = /\b(luva|uniao)\b/i.test(normA);
+  const isLuvaB = /\b(luva|uniao)\b/i.test(normB);
+  if (isLuvaA !== isLuvaB) return false;
+
+  const isConectorA = /\b(conector|adaptador)\b/i.test(normA);
+  const isConectorB = /\b(conector|adaptador)\b/i.test(normB);
+  if (isConectorA !== isConectorB) return false;
 
   // 3. IDENTIFICAÇÃO DE PRODUTOS CANÔNICOS CHAVE DA ENGENHARIA
   // Caixa Octogonal

@@ -4,18 +4,15 @@ import {
   Sparkles, 
   AlertTriangle, 
   CheckCircle2, 
-  Scale, 
-  ArrowRight, 
-  HelpCircle, 
   X, 
-  Layers,
-  ChevronRight,
-  ShieldCheck
+  ShieldCheck,
+  Link2
 } from 'lucide-react';
 
 interface ModalConciliacaoQcProps {
   verificacao: VerificacaoConciliacaoResponse;
   materiaisMestre: ItemCanonico[];
+  itensOutrosFornecedores?: Array<{ fornecedor: string; descricao: string; unidade?: string }>;
   onConfirmar: (associacoesAprovadas: Array<{
     descricaoOriginal: string;
     fornecedorId?: number;
@@ -32,34 +29,44 @@ interface ModalConciliacaoQcProps {
 export function ModalConciliacaoQc({
   verificacao,
   materiaisMestre,
+  itensOutrosFornecedores = [],
   onConfirmar,
   onIgnorar,
 }: ModalConciliacaoQcProps) {
   // Estado para cada discrepância/sugestão
-  // Mapeia a decisão do usuário: 'mesclar' | 'separar'
   const [decisoes, setDecisoes] = useState<Record<string, {
     acao: 'mesclar' | 'separar';
     materialId: number;
+    itemCorrespondenteDesc: string;
+    nomeCustomizado: string;
     lembrar: boolean;
   }>>(() => {
     const initial: Record<string, any> = {};
-    verificacao.sugestoes.forEach((sug) => {
-      initial[sug.itemDescricaoOriginal] = {
+
+    verificacao.discrepancias.forEach((disc) => {
+      const primeiroSug = disc.possiveisEquivalentes?.[0];
+      const outroDesc = primeiroSug?.descricaoCanonico || primeiroSug?.itemDescricaoEquivalente || '';
+      initial[disc.descricaoItem] = {
         acao: 'mesclar',
-        materialId: sug.itemCanonicoSugeridoId || (materiaisMestre[0]?.id || 0),
+        materialId: primeiroSug?.itemCanonicoSugeridoId || 0,
+        itemCorrespondenteDesc: outroDesc,
+        nomeCustomizado: primeiroSug?.descricaoCanonico || disc.descricaoItem,
         lembrar: true
       };
     });
-    verificacao.discrepancias.forEach((disc) => {
-      if (!initial[disc.descricaoItem]) {
-        const primeiroSug = disc.possiveisEquivalentes?.[0];
-        initial[disc.descricaoItem] = {
-          acao: primeiroSug ? 'mesclar' : 'separar',
-          materialId: primeiroSug?.itemCanonicoSugeridoId || (materiaisMestre[0]?.id || 0),
+
+    verificacao.sugestoes.forEach((sug) => {
+      if (!initial[sug.itemDescricaoOriginal]) {
+        initial[sug.itemDescricaoOriginal] = {
+          acao: 'mesclar',
+          materialId: sug.itemCanonicoSugeridoId || 0,
+          itemCorrespondenteDesc: sug.itemDescricaoEquivalente || '',
+          nomeCustomizado: sug.descricaoCanonico || sug.itemDescricaoOriginal,
           lembrar: true
         };
       }
     });
+
     return initial;
   });
 
@@ -75,12 +82,42 @@ export function ModalConciliacaoQc({
     }));
   };
 
-  const handleChangeMaterial = (itemDescricao: string, matId: number) => {
+  const handleChangeCorrespondente = (itemDescricao: string, outroDesc: string) => {
+    setDecisoes(prev => {
+      const atual = prev[itemDescricao];
+      let nomeSugerido = atual?.nomeCustomizado || itemDescricao;
+      if (outroDesc && (!atual?.nomeCustomizado || atual.nomeCustomizado === itemDescricao)) {
+        nomeSugerido = itemDescricao;
+      }
+      return {
+        ...prev,
+        [itemDescricao]: {
+          ...atual,
+          itemCorrespondenteDesc: outroDesc,
+          nomeCustomizado: nomeSugerido
+        }
+      };
+    });
+  };
+
+  const handleChangeNomeCustomizado = (itemDescricao: string, nome: string) => {
     setDecisoes(prev => ({
       ...prev,
       [itemDescricao]: {
         ...prev[itemDescricao],
-        materialId: matId
+        nomeCustomizado: nome
+      }
+    }));
+  };
+
+  const handleChangeMaterialMestre = (itemDescricao: string, matId: number) => {
+    const mat = materiaisMestre.find(m => m.id === matId);
+    setDecisoes(prev => ({
+      ...prev,
+      [itemDescricao]: {
+        ...prev[itemDescricao],
+        materialId: matId,
+        nomeCustomizado: mat ? mat.descricaoPadrao : prev[itemDescricao]?.nomeCustomizado || ''
       }
     }));
   };
@@ -97,13 +134,33 @@ export function ModalConciliacaoQc({
 
   const handleSalvarTudo = () => {
     setSalvando(true);
-    const listaAprovadas = Object.entries(decisoes)
-      .filter(([_, d]) => d.acao === 'mesclar' && d.materialId > 0)
-      .map(([descOriginal, d]) => ({
+    const listaAprovadas: Array<any> = [];
+
+    Object.entries(decisoes).forEach(([descOriginal, d]) => {
+      if (d.acao !== 'mesclar') return;
+
+      const nomeFinal = d.nomeCustomizado?.trim() || descOriginal;
+
+      // 1. Associa o item A
+      listaAprovadas.push({
         descricaoOriginal: descOriginal,
-        itemCanonicoId: d.materialId,
+        itemCanonicoId: d.materialId > 0 ? d.materialId : undefined,
+        criarNovoCanonico: d.materialId <= 0,
+        novaDescricaoCanonico: nomeFinal,
         lembrarPermanente: d.lembrar,
-      }));
+      });
+
+      // 2. Se o usuário vinculou a outro item de outro orçamento, associa o item B ao mesmo material!
+      if (d.itemCorrespondenteDesc && d.itemCorrespondenteDesc.trim().length > 0) {
+        listaAprovadas.push({
+          descricaoOriginal: d.itemCorrespondenteDesc.trim(),
+          itemCanonicoId: d.materialId > 0 ? d.materialId : undefined,
+          criarNovoCanonico: d.materialId <= 0,
+          novaDescricaoCanonico: nomeFinal,
+          lembrarPermanente: d.lembrar,
+        });
+      }
+    });
 
     onConfirmar(listaAprovadas);
   };
@@ -120,13 +177,13 @@ export function ModalConciliacaoQc({
             </div>
             <div>
               <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-                Assistente de Conciliação Inteligente de Itens
+                Conciliar Materiais entre Cotações
                 <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 text-xs font-semibold rounded-md border border-amber-500/30">
-                  Aprendizado Progressivo
+                  Pareamento Direto & Aprendizado
                 </span>
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Revise os itens equivalentes antes de finalizar o Quadro Comparativo para evitar linhas duplicadas e comparar preços justos.
+                Conecte os itens correspondentes dos fornecedores para que apareçam na mesma linha do Quadro Comparativo e memorizem esse sinônimo para sempre.
               </p>
             </div>
           </div>
@@ -141,33 +198,58 @@ export function ModalConciliacaoQc({
             <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
             <div className="text-xs space-y-1">
               <p className="font-semibold text-amber-300 text-sm">
-                Discrepância na Contagem de Linhas do Quadro
+                Itens Pendentes de Conciliação
               </p>
               <p className="text-slate-300">
                 {verificacao.mensagemAlerta}
-              </p>
-              <p className="text-amber-400/90 font-mono text-[11px] pt-1">
-                • Maior proposta: {verificacao.maiorOrcamentoLinhas} itens | Quadro gerado: {verificacao.totalLinhasQc} linhas
               </p>
             </div>
           </div>
         ) : (
           <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-2 text-xs text-emerald-400">
             <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-            <span>Nenhuma inconsistência grave de quantidade de linhas detectada. Você pode revisar as sugestões de sinônimos abaixo.</span>
+            <span>Revise os itens abaixo ou vincule qualquer material a uma cotação concorrente.</span>
           </div>
         )}
 
         {/* LISTA DE SUGESTÕES / DISCREPÂNCIAS */}
-        <div className="flex-1 overflow-y-auto space-y-3.5 pr-2">
+        <div className="flex-1 overflow-y-auto space-y-4 pr-2">
           {verificacao.discrepancias.length === 0 && verificacao.sugestoes.length === 0 ? (
             <div className="py-12 text-center text-slate-500 text-sm">
-              Todos os itens deste orçamento já estão conciliados com a base de conhecimento.
+              Nenhuma linha pendente de conciliação detectada neste momento.
             </div>
           ) : (
             verificacao.discrepancias.map((disc, idx) => {
-              const decisao = decisoes[disc.descricaoItem] || { acao: 'mesclar', materialId: 0, lembrar: true };
+              const decisao = decisoes[disc.descricaoItem] || { 
+                acao: 'mesclar', 
+                materialId: 0, 
+                itemCorrespondenteDesc: '',
+                nomeCustomizado: disc.descricaoItem, 
+                lembrar: true 
+              };
               const sug = disc.possiveisEquivalentes?.[0];
+
+              // Constrói lista de candidatos para pareamento
+              const candidatosPareamento: Array<{ descricao: string; label: string }> = [];
+              if (disc.possiveisEquivalentes) {
+                disc.possiveisEquivalentes.forEach(s => {
+                  const desc = s.descricaoCanonico || s.itemDescricaoEquivalente;
+                  if (desc && desc !== disc.descricaoItem && !candidatosPareamento.some(c => c.descricao === desc)) {
+                    candidatosPareamento.push({
+                      descricao: desc,
+                      label: `${s.fornecedorNome ? '[' + s.fornecedorNome + '] ' : ''}${desc} (Sugerido ${s.confianca}%)`
+                    });
+                  }
+                });
+              }
+              itensOutrosFornecedores.forEach(it => {
+                if (it.descricao !== disc.descricaoItem && !candidatosPareamento.some(c => c.descricao === it.descricao)) {
+                  candidatosPareamento.push({
+                    descricao: it.descricao,
+                    label: `[${it.fornecedor}] ${it.descricao}`
+                  });
+                }
+              });
 
               return (
                 <div 
@@ -178,116 +260,132 @@ export function ModalConciliacaoQc({
                       : 'bg-slate-900/40 border-slate-800 opacity-60'
                   }`}
                 >
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="space-y-1.5 flex-1">
+                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                    {/* LADO ESQUERDO: ITEM ORIGINAL */}
+                    <div className="space-y-2 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="px-2 py-0.5 bg-slate-700 text-slate-300 text-[11px] font-medium rounded">
+                        <span className="px-2 py-0.5 bg-slate-700 text-slate-200 text-[11px] font-semibold rounded">
                           {disc.fornecedorPresente}
                         </span>
                         {sug && (
                           <span className={`px-2 py-0.5 text-[10px] font-bold rounded border ${
-                            sug.confianca >= 90
+                            sug.confianca >= 80
                               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                               : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                           }`}>
-                            {sug.confianca}% de Similaridade
-                          </span>
-                        )}
-                        {sug?.fatorConversao && Number(sug.fatorConversao) !== 1 && (
-                          <span className="px-2 py-0.5 bg-cyan-500/10 text-cyan-400 text-[10px] font-semibold rounded border border-cyan-500/20 flex items-center gap-1">
-                            <Scale className="w-3 h-3" />
-                            Conversão: 1 {sug.unidadeOriginal} = {Number(sug.fatorConversao)} {sug.unidadeCanonico}
+                            {sug.confianca}% Similaridade
                           </span>
                         )}
                       </div>
 
-                      <p className="font-mono text-sm font-semibold text-white">
-                        "{disc.descricaoItem}"
+                      <p className="font-mono text-sm font-bold text-white bg-slate-950/40 p-2.5 rounded-lg border border-slate-800">
+                        {disc.descricaoItem}
                       </p>
 
-                      {sug && (
+                      {sug && sug.justificativa && (
                         <p className="text-xs text-slate-400">
                           {sug.justificativa}
                         </p>
                       )}
-
-                      {sug?.motivos && sug.motivos.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {sug.motivos.map((motivo, mIdx) => (
-                            <span 
-                              key={mIdx}
-                              className={`text-[10px] px-2.5 py-0.5 rounded-md font-medium border flex items-center gap-1 ${
-                                motivo.startsWith('⛔')
-                                  ? 'bg-rose-950/80 text-rose-300 border-rose-500/50 font-bold shadow-sm'
-                                  : motivo.startsWith('⚠️')
-                                  ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                                  : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
-                              }`}
-                            >
-                              {motivo}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {sug?.alertaEspecificacao && (
-                        <div className="p-2 bg-amber-500/15 border border-amber-500/30 rounded-lg text-xs text-amber-300 flex items-start gap-1.5 mt-1">
-                          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                          <span>{sug.alertaEspecificacao}</span>
-                        </div>
-                      )}
                     </div>
 
-                    {/* SELEÇÃO DO MATERIAL CANÔNICO */}
-                    <div className="flex flex-col md:items-end gap-2 min-w-[280px]">
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleAcao(disc.descricaoItem, 'mesclar')}
-                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition ${
-                            decisao.acao === 'mesclar'
-                              ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-sm'
-                              : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-                          }`}
-                        >
-                          Mesclar Linha
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleAcao(disc.descricaoItem, 'separar')}
-                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition ${
-                            decisao.acao === 'separar'
-                              ? 'bg-slate-700 text-white border-slate-600'
-                              : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-white'
-                          }`}
-                        >
-                          Manter Separado
-                        </button>
+                    {/* LADO DIREITO: CONTROLES DE CONCILIAÇÃO */}
+                    <div className="flex flex-col gap-2.5 min-w-[340px]">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleAcao(disc.descricaoItem, 'mesclar')}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition ${
+                              decisao.acao === 'mesclar'
+                                ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-sm'
+                                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                            }`}
+                          >
+                            Mesclar Linha
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleAcao(disc.descricaoItem, 'separar')}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition ${
+                              decisao.acao === 'separar'
+                                ? 'bg-slate-700 text-white border-slate-600'
+                                : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-white'
+                            }`}
+                          >
+                            Manter Separado
+                          </button>
+                        </div>
                       </div>
 
                       {decisao.acao === 'mesclar' && (
-                        <div className="w-full space-y-1.5">
-                          <select
-                            value={decisao.materialId}
-                            onChange={(e) => handleChangeMaterial(disc.descricaoItem, Number(e.target.value))}
-                            className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                          >
-                            <option value={0}>-- Selecione o Material Mestre --</option>
-                            {materiaisMestre.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.descricaoPadrao} ({m.unidadePadrao})
-                              </option>
-                            ))}
-                          </select>
+                        <div className="space-y-2 bg-slate-950/60 p-3 rounded-xl border border-slate-700/80">
+                          {/* PAREAR COM ITEM DO OUTRO FORNECEDOR */}
+                          {candidatosPareamento.length > 0 && (
+                            <div className="space-y-1">
+                              <label className="text-[11px] font-semibold text-amber-400 flex items-center gap-1">
+                                <Link2 className="w-3.5 h-3.5" />
+                                <span>Vincular com item da outra cotação:</span>
+                              </label>
+                              <select
+                                value={decisao.itemCorrespondenteDesc}
+                                onChange={(e) => handleChangeCorrespondente(disc.descricaoItem, e.target.value)}
+                                className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                              >
+                                <option value="">-- Selecione o item correspondente --</option>
+                                {candidatosPareamento.map((c, cIdx) => (
+                                  <option key={cIdx} value={c.descricao}>
+                                    {c.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
 
-                          <label className="flex items-center gap-2 text-[11px] text-slate-400 cursor-pointer select-none">
+                          {/* NOME PADRONIZADO DA LINHA */}
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-semibold text-slate-300">
+                              Nome da linha no Comparativo (Material Mestre):
+                            </label>
+                            <input
+                              type="text"
+                              value={decisao.nomeCustomizado}
+                              onChange={(e) => handleChangeNomeCustomizado(disc.descricaoItem, e.target.value)}
+                              placeholder="Digite ou ajuste o nome padronizado da linha"
+                              className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+
+                          {/* OU SELECIONAR DO CATÁLOGO MESTRE */}
+                          {materiaisMestre.length > 0 && (
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">
+                                Ou vincular a um material já cadastrado:
+                              </label>
+                              <select
+                                value={decisao.materialId}
+                                onChange={(e) => handleChangeMaterialMestre(disc.descricaoItem, Number(e.target.value))}
+                                className="w-full px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg text-[11px] text-slate-400 focus:outline-none focus:border-amber-500"
+                              >
+                                <option value={0}>-- Selecionar do Catálogo (Opcional) --</option>
+                                {materiaisMestre.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.descricaoPadrao} ({m.unidadePadrao})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+
+                          {/* LEMBRAR PERMANENTE */}
+                          <label className="flex items-center gap-2 text-[11px] text-slate-400 cursor-pointer select-none pt-1">
                             <input
                               type="checkbox"
                               checked={decisao.lembrar}
                               onChange={() => handleToggleLembrar(disc.descricaoItem)}
                               className="rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-0"
                             />
-                            <span>Salvar na base de conhecimento para sempre</span>
+                            <span>Salvar no De-Para para orçamentos futuros</span>
                           </label>
                         </div>
                       )}
@@ -303,25 +401,25 @@ export function ModalConciliacaoQc({
         <div className="flex items-center justify-between border-t border-slate-800 pt-4">
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Associações confirmadas serão salvas no dicionário de De-Para e auditadas.</span>
+            <span>Associações confirmadas unificam a linha no QC e alimentam o aprendizado de IA.</span>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={onIgnorar}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-medium transition"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-medium transition cursor-pointer"
             >
-              Ignorar e Abrir QC
+              Fechar
             </button>
             <button
               type="button"
               disabled={salvando}
               onClick={handleSalvarTudo}
-              className="flex items-center gap-2 px-6 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-sm shadow-lg shadow-amber-500/20 transition"
+              className="flex items-center gap-2 px-6 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-sm shadow-lg shadow-amber-500/20 transition cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
-              {salvando ? 'Salvando...' : 'Aplicar Conciliação e Abrir QC'}
+              {salvando ? 'Salvando...' : 'Aplicar Conciliação e Unificar no QC'}
             </button>
           </div>
         </div>
@@ -330,4 +428,3 @@ export function ModalConciliacaoQc({
     </div>
   );
 }
-

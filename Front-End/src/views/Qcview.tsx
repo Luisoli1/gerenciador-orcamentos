@@ -390,18 +390,36 @@ export function QCView({ obraId, initialQcId, initialQcData, onClearInitialQc }:
 
   // Abrir Modal de Conciliação Manualmente
   const handleAbrirConciliacaoManual = async () => {
-    if (!activeQc) return;
+    const alvo = qcData || activeQc;
+    if (!alvo) return;
     setLoading(true);
     try {
       const [verif, mats] = await Promise.all([
-        api.verificarDiscrepancias(activeQc),
-        api.listarMateriaisMestre()
+        api.verificarDiscrepancias(alvo),
+        api.listarMateriaisMestre().catch(() => [])
       ]);
       setVerificacaoConciliacao(verif);
       setMateriaisMestre(mats);
       setModalConciliacaoAberto(true);
     } catch (err: any) {
-      alert("Erro ao verificar conciliação: " + (err?.response?.data?.message || err.message));
+      console.warn("Abrindo conciliador com dados locais após falha na API:", err);
+      const mats = await api.listarMateriaisMestre().catch(() => []);
+      setMateriaisMestre(mats);
+      setVerificacaoConciliacao({
+        possuiDiscrepancia: true,
+        totalLinhasQc: rows.length,
+        maiorOrcamentoLinhas: rows.length,
+        menorOrcamentoLinhas: rows.length,
+        mensagemAlerta: "Selecione os materiais equivalentes entre os orçamentos para unificá-los.",
+        sugestoes: [],
+        discrepancias: rows.map(r => ({
+          descricaoItem: r.descricao,
+          fornecedorPresente: r.quotes.find(q => q.valorUnitario !== null)?.fornecedorNome || "Cotação",
+          fornecedoresFaltantes: r.quotes.filter(q => q.valorUnitario === null).map(q => q.fornecedorNome),
+          possiveisEquivalentes: []
+        }))
+      });
+      setModalConciliacaoAberto(true);
     } finally {
       setLoading(false);
     }
@@ -460,6 +478,23 @@ export function QCView({ obraId, initialQcId, initialQcData, onClearInitialQc }:
       setConciliandoIa(false);
     }
   };
+
+  const todosItensQc = useMemo(() => {
+    if (!qcData?.orcamentos) return [];
+    const list: Array<{ fornecedor: string; descricao: string; unidade?: string }> = [];
+    qcData.orcamentos.forEach(orc => {
+      (orc.itens || []).forEach(it => {
+        if (it.descricao) {
+          list.push({
+            fornecedor: orc.nomeFornecedor || 'Fornecedor',
+            descricao: it.descricao,
+            unidade: it.unidadeMedida
+          });
+        }
+      });
+    });
+    return list;
+  }, [qcData]);
 
   // Recalcular totais e vencedor após qualquer edição
   const recalcularTotaisDoQc = (qcAtual: QuadroComparativoDto): QuadroComparativoDto => {
@@ -1599,6 +1634,15 @@ Equipe de Suprimentos - Makinsthal`;
                       <span>Conciliar com IA</span>
                     </>
                   )}
+                </button>
+
+                <button
+                  onClick={handleAbrirConciliacaoManual}
+                  className="text-xs px-3.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-full font-bold flex items-center gap-2 transition cursor-pointer shadow-sm"
+                  title="Abrir assistente para conciliar manualmente ou parear materiais de diferentes fornecedores"
+                >
+                  <Layers className="w-3.5 h-3.5 text-amber-400" />
+                  <span>⚡ Conciliar Materiais</span>
                 </button>
 
                 <span className="text-xs px-3.5 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-bold flex items-center gap-2">
@@ -2875,6 +2919,7 @@ Equipe de Suprimentos - Makinsthal`;
         <ModalConciliacaoQc
           verificacao={verificacaoConciliacao}
           materiaisMestre={materiaisMestre}
+          itensOutrosFornecedores={todosItensQc}
           onConfirmar={handleConfirmarConciliacao}
           onIgnorar={() => setModalConciliacaoAberto(false)}
         />,

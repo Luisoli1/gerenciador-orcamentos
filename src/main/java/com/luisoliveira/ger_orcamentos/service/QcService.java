@@ -104,6 +104,16 @@ public class QcService {
                 for (ItemOrcamento item : orc.getItens()) {
                     Long canonicoId = item.getItemCanonico() != null ? item.getItemCanonico().getId() : null;
                     String nomeCanonico = item.getItemCanonico() != null ? item.getItemCanonico().getDescricaoPadrao() : null;
+
+                    if (canonicoId == null && item.getDescricao() != null) {
+                        String norm = normalizarTexto(item.getDescricao());
+                        var aliasOpt = itemAliasRepository.findFirstByDescricaoNormalizadaAndFornecedorIsNullAndAtivoTrue(norm);
+                        if (aliasOpt.isPresent() && aliasOpt.get().getItemCanonico() != null) {
+                            canonicoId = aliasOpt.get().getItemCanonico().getId();
+                            nomeCanonico = aliasOpt.get().getItemCanonico().getDescricaoPadrao();
+                        }
+                    }
+
                     itensDto.add(new ItemQuadroDTO(
                             item.getMarca(),
                             item.getDescricao(),

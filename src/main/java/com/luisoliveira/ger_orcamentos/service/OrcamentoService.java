@@ -169,25 +169,7 @@ public class OrcamentoService {
             salvarOrcamentoNoBanco(dto, novoQc);
         }
 
-        // Executa conciliação semântica com IA automaticamente para unificar itens
-        try {
-            return qcService.conciliarQcComIa(novoQc.getId());
-        } catch (Exception e) {
-            System.err.println("Aviso: Falha na conciliação automática com IA: " + e.getMessage());
-        }
-
-        QuadroConcorrenciaDto vencedor = listaOrcamentos.stream()
-                .filter(o -> o.getValorTotalGeral() != null)
-                .min(Comparator.comparing(QuadroConcorrenciaDto::getValorTotalGeral))
-                .orElse(null);
-
-        String nomeVencedor = (vencedor != null && vencedor.getNomeFornecedor() != null)
-                ? vencedor.getNomeFornecedor()
-                : "Não identificado";
-
-        String observacao = "Vencedor determinado pelo Valor Total Geral";
-
-        return new QuadroComparativoDto(metadados, listaOrcamentos, nomeVencedor, observacao);
+        return qcService.montarQuadroComparativo(novoQc.getId());
     }
 
     public Object processarMultiplosComObra(Long obraId, List<MultipartFile> files, boolean forceNew) {

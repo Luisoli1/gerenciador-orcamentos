@@ -307,28 +307,33 @@ export function QCView({ obraId, initialQcId, initialQcData, onClearInitialQc }:
       setModoEdicao(false);
       setQcEditavel(null);
       setConflitoModal(null);
-      await carregarQcsDaObra();
+      setLoading(false); // Libera a tela, os botões e o banner de processamento imediatamente
 
-      // Verificação automática de conciliação / discrepâncias (ex: 30 + 30 = 33)
-      try {
-        const verif = await api.verificarDiscrepancias(resultado);
-        if (verif && (verif.possuiDiscrepancia || (verif.discrepancias && verif.discrepancias.length > 0))) {
-          const mats = await api.listarMateriaisMestre();
-          setVerificacaoConciliacao(verif);
-          setMateriaisMestre(mats);
-          setModalConciliacaoAberto(true);
+      // Tarefas pós-renderização (não bloqueiam o usuário na tela)
+      (async () => {
+        try {
+          await carregarQcsDaObra();
+
+          // Identifica e vincula o ID do QC recém gerado
+          const numGerado = resultado?.metadados?.numeroQuadro || numeroQcParam;
+          if (numGerado) {
+            const novaLista = await api.listarQcsPorObra(obraId);
+            const achado = novaLista.find(q => q.numeroQuadro === numGerado);
+            if (achado) setSelectedQcId(achado.id);
+          }
+
+          // Verificação de conciliação / discrepâncias em segundo plano
+          const verif = await api.verificarDiscrepancias(resultado);
+          if (verif && (verif.possuiDiscrepancia || (verif.discrepancias && verif.discrepancias.length > 0))) {
+            const mats = await api.listarMateriaisMestre().catch(() => []);
+            setVerificacaoConciliacao(verif);
+            setMateriaisMestre(mats);
+            setModalConciliacaoAberto(true);
+          }
+        } catch (vErr) {
+          console.warn("Verificação assíncrona pós-QC:", vErr);
         }
-      } catch (vErr) {
-        console.warn("Verificação de conciliação silenciosa:", vErr);
-      }
-
-      // Identifica e vincula o ID do QC recém gerado
-      const numGerado = resultado?.metadados?.numeroQuadro || numeroQcParam;
-      if (numGerado) {
-        const novaLista = await api.listarQcsPorObra(obraId);
-        const achado = novaLista.find(q => q.numeroQuadro === numGerado);
-        if (achado) setSelectedQcId(achado.id);
-      }
+      })();
 
       if (acao === 'excel') {
         try {

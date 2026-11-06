@@ -640,6 +640,41 @@ export function QCView({ obraId, initialQcId, initialQcData, onClearInitialQc }:
     return consolidateQuadro(activeQc.orcamentos);
   }, [activeQc]);
 
+  // Vencedor Geral Efetivo (Equalizado por quantidade e atendimento integral)
+  const fornecedorVencedorEfetivo = useMemo(() => {
+    if (!activeQc || !activeQc.orcamentos || consolidatedItems.length === 0) {
+      return activeQc?.fornecedorVencedor || '';
+    }
+
+    let menorTotalEqualizado: number | null = null;
+    let vencedorNome: string = '';
+
+    activeQc.orcamentos.forEach(orc => {
+      let totalEqualizado = 0;
+      let itensCotados = 0;
+
+      consolidatedItems.forEach(item => {
+        const q = item.quotes.find(quote => quote.fornecedorNome === orc.nomeFornecedor);
+        if (q && q.valorUnitario !== null && q.valorUnitario > 0) {
+          itensCotados++;
+          // Valor unitário normalizado * quantidade padrão da linha
+          totalEqualizado += q.valorUnitario * item.quantidade;
+        }
+      });
+
+      // Só é eleito se atendeu todos os itens consolidados
+      if (itensCotados === consolidatedItems.length && totalEqualizado > 0) {
+        if (menorTotalEqualizado === null || totalEqualizado < menorTotalEqualizado) {
+          menorTotalEqualizado = totalEqualizado;
+          vencedorNome = orc.nomeFornecedor;
+        }
+      }
+    });
+
+    if (vencedorNome) return vencedorNome;
+    return activeQc.fornecedorVencedor || '';
+  }, [activeQc, consolidatedItems]);
+
   // Filtro de materiais em tempo real
   const filteredItems = useMemo(() => {
     if (!searchTerm.trim()) return consolidatedItems;
@@ -1528,7 +1563,7 @@ Equipe de Suprimentos - Makinsthal`;
               <div className="flex items-center gap-3">
                 <span className="text-xs px-3.5 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-bold flex items-center gap-2">
                   <Trophy className="w-4 h-4 text-amber-400" />
-                  <span>Vencedor Geral: <strong>{activeQc.fornecedorVencedor || "Em análise"}</strong></span>
+                  <span>Vencedor Geral: <strong>{fornecedorVencedorEfetivo || "Em análise"}</strong></span>
                 </span>
               </div>
             </div>
@@ -1614,7 +1649,7 @@ Equipe de Suprimentos - Makinsthal`;
                               <span className="font-extrabold text-slate-100 text-xs tracking-tight">
                                 {orc.nomeFornecedor}
                               </span>
-                              {activeQc.fornecedorVencedor === orc.nomeFornecedor && (
+                              {fornecedorVencedorEfetivo === orc.nomeFornecedor && (
                                 <Trophy className="w-3.5 h-3.5 text-amber-400 inline" />
                               )}
                             </div>
@@ -1824,13 +1859,34 @@ Equipe de Suprimentos - Makinsthal`;
                                 className="w-24 px-1.5 py-1 bg-slate-950 border border-blue-500/60 focus:border-emerald-400 rounded text-right text-xs font-mono font-bold text-emerald-400 shadow-inner"
                               />
                             ) : (
-                              fmt(q.valorUnitario)
+                              <div className="flex flex-col items-end">
+                                <span>{fmt(q.valorUnitario)}</span>
+                                {q.fatorConversao && q.fatorConversao > 1 && (
+                                  <span 
+                                    className="text-[10px] text-slate-400 font-normal font-sans"
+                                    title={`Preço original do fornecedor: ${fmt(q.valorUnitarioOriginal)} por ${q.unidadeOriginal} (Embalagem com ${q.fatorConversao})`}
+                                  >
+                                    ({fmt(q.valorUnitarioOriginal)}/{q.unidadeOriginal})
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </td>
 
                           {/* Total (R$) - Recalculado dinamicamente */}
                           <td className={`p-2.5 text-right border-r border-slate-800 ${q.isMelhorTotal ? 'bg-emerald-500/10 text-emerald-400 font-bold' : 'text-slate-300'}`}>
-                            {fmt(q.valorTotal)}
+                            <div className="flex flex-col items-end">
+                              <span>{fmt(q.valorTotal)}</span>
+                              {q.isQuantidadeDivergente && (
+                                <span 
+                                  className="text-[9px] text-amber-300 font-normal font-sans flex items-center gap-0.5 bg-amber-500/15 px-1 py-0.5 rounded border border-amber-500/30 mt-0.5" 
+                                  title={q.quantidadeDivergenteTexto}
+                                >
+                                  <AlertTriangle className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                                  Qtd: {q.quantidadeOriginal} {q.unidadeOriginal}
+                                </span>
+                              )}
+                            </div>
                           </td>
                         </React.Fragment>
                       ))}
@@ -1887,7 +1943,7 @@ Equipe de Suprimentos - Makinsthal`;
                       VALOR TOTAL GERAL
                     </td>
                     {activeQc.orcamentos?.map((orc, idx) => {
-                      const isVencedor = activeQc.fornecedorVencedor === orc.nomeFornecedor;
+                      const isVencedor = fornecedorVencedorEfetivo === orc.nomeFornecedor;
                       return (
                         <React.Fragment key={idx}>
                           <td colSpan={2} className="p-3.5 border-r border-slate-800"></td>

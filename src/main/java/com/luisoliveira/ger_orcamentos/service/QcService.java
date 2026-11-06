@@ -110,8 +110,13 @@ public class QcService {
             listaOrcamentosDto.add(orcDto);
         }
 
+        int maxItens = listaOrcamentosDto.stream()
+                .mapToInt(o -> o.getItens() != null ? o.getItens().size() : 0)
+                .max()
+                .orElse(0);
+
         QuadroConcorrenciaDto vencedor = listaOrcamentosDto.stream()
-                .filter(o -> o.getValorTotalGeral() != null)
+                .filter(o -> o.getValorTotalGeral() != null && o.getItens() != null && o.getItens().size() >= maxItens)
                 .min(Comparator.comparing(QuadroConcorrenciaDto::getValorTotalGeral))
                 .orElse(null);
 

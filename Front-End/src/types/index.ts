@@ -176,6 +176,12 @@ export interface ConsolidatedQuote {
   fornecedorNome: string;
   valorUnitario: number | null;
   valorTotal: number | null;
+  valorUnitarioOriginal?: number | null;
+  quantidadeOriginal?: number | null;
+  unidadeOriginal?: string;
+  fatorConversao?: number;
+  isQuantidadeDivergente?: boolean;
+  quantidadeDivergenteTexto?: string;
   marca?: string;
   chapa?: string;
   descricaoOriginal?: string;

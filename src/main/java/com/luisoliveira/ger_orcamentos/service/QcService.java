@@ -65,8 +65,7 @@ public class QcService {
     @Autowired
     private ItemOrcamentoRepository itemOrcamentoRepository;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public List<Qc> listarTodos() {
         return qcRepository.findAll();
